@@ -1,7 +1,7 @@
 import json
 import ast
 import operator as op
-from database import get_db, log_event
+from database import get_db, log_event, log_strategy_trigger
 from indicators import indicator_manager, gg_rule_generator
 from atr_strategy import atr_strategy_generator
 from vomy_strategy import VomyStrategyGenerator, VomyStrategyEvaluator
@@ -70,6 +70,7 @@ async def check_strategies(tick):
     
     for strategy in strategies:
         strategy_type = strategy.get("strategy_type", "standard")
+        triggered_strategy = None
         
         if strategy_type == "golden_gate":
             # Handle Golden Gate strategies
@@ -79,10 +80,10 @@ async def check_strategies(tick):
                 tick.get("symbol", "SPY")
             )
             if result.get("triggered", False):
-                triggered.append({
+                triggered_strategy = {
                     **strategy,
                     "evaluation_result": result
-                })
+                }
         elif strategy_type == "atr_based":
             # Handle ATR-based strategies
             result = await atr_strategy_generator.evaluate_atr_strategy(
@@ -91,10 +92,10 @@ async def check_strategies(tick):
                 tick.get("symbol", "SPY")
             )
             if result.get("triggered", False):
-                triggered.append({
+                triggered_strategy = {
                     **strategy,
                     "evaluation_result": result
-                })
+                }
         elif strategy_type == "vomy_ivomy":
             # Handle Vomy & iVomy strategies
             timeframe = strategy.get("timeframe", "1d")
@@ -106,10 +107,10 @@ async def check_strategies(tick):
                 result = vomy_evaluator.evaluate_strategies([strategy])
                 
                 if result:
-                    triggered.append({
+                    triggered_strategy = {
                         **strategy,
                         "evaluation_result": result[0]
-                    })
+                    }
         elif strategy_type == "po_dot":
             # Handle PO Dot strategies
             result = await po_dot_strategy_generator.evaluate_po_dot_strategy(
@@ -117,10 +118,10 @@ async def check_strategies(tick):
                 tick
             )
             if result.get("triggered", False):
-                triggered.append({
+                triggered_strategy = {
                     **strategy,
                     "evaluation_result": result
-                })
+                }
         elif strategy_type == "conviction_arrow":
             # Handle Conviction Arrow strategies
             result = await conviction_arrow_strategy.evaluate_conviction_arrow(
@@ -128,10 +129,10 @@ async def check_strategies(tick):
                 tick
             )
             if result.get("triggered", False):
-                triggered.append({
+                triggered_strategy = {
                     **strategy,
                     "evaluation_result": result
-                })
+                }
         else:
             # Handle standard strategies with direct expressions
             await log_event("debug", {"message": f"Checking strategy '{strategy['name']}' with expr '{strategy['strategy_expression']}' against tick {tick}"})
@@ -139,7 +140,49 @@ async def check_strategies(tick):
             await log_event("debug", {"message": f"Strategy '{strategy['name']}' evaluation result: {result}"})
             if result:
                 await log_event("debug", {"message": f"Strategy '{strategy['name']}' triggered!"})
-                triggered.append(strategy)
+                triggered_strategy = strategy
+        
+        # Log strategy trigger if strategy fired
+        if triggered_strategy:
+            try:
+                # Extract trigger details
+                evaluation_result = triggered_strategy.get("evaluation_result", {})
+                symbol = tick.get("symbol", "SPY")
+                timeframe = evaluation_result.get("timeframe", "1d")
+                trigger_type = evaluation_result.get("trigger_type", "signal")
+                side = evaluation_result.get("side", evaluation_result.get("direction"))
+                price = tick.get("price", tick.get("value", 0))
+                confidence = evaluation_result.get("confidence", 0.8)
+                conditions_met = evaluation_result.get("conditions_met", [strategy.get("strategy_expression", "Unknown")])
+                market_data = {
+                    "tick": tick,
+                    "strategy_expression": strategy.get("strategy_expression"),
+                    "evaluation_result": evaluation_result
+                }
+                
+                # Log the strategy trigger
+                await log_strategy_trigger(
+                    strategy_id=strategy["id"],
+                    strategy_name=strategy["name"],
+                    strategy_type=strategy_type,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    trigger_type=trigger_type,
+                    side=side,
+                    price=price,
+                    confidence=confidence,
+                    conditions_met=conditions_met,
+                    market_data=market_data
+                )
+                
+                triggered.append(triggered_strategy)
+                
+            except Exception as e:
+                await log_event("strategy_trigger_log_error", {
+                    "error": str(e),
+                    "strategy_id": strategy["id"],
+                    "strategy_name": strategy["name"]
+                })
     
     return triggered
 

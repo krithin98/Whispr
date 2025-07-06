@@ -3,8 +3,8 @@ import json
 import os
 from pathlib import Path
 
-DB_PATH = Path(os.getenv("DB_PATH", "/app/data/seer.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # /app/data
+DB_PATH = Path(os.getenv("DB_PATH", "./data/seer.db"))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # ./data
 
 CREATE_EVENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS events (
@@ -112,6 +112,31 @@ CREATE TABLE IF NOT EXISTS gg_events (
 );
 """
 
+CREATE_STRATEGY_TRIGGERS_TABLE = """
+CREATE TABLE IF NOT EXISTS strategy_triggers (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_id  INTEGER NOT NULL,
+    strategy_name TEXT NOT NULL,
+    strategy_type TEXT NOT NULL,
+    symbol       TEXT NOT NULL,
+    timeframe    TEXT NOT NULL,
+    trigger_type TEXT NOT NULL,   -- 'entry', 'exit', 'signal', 'alert'
+    side         TEXT,            -- 'bull', 'bear', 'long', 'short', null
+    price        REAL,
+    confidence   REAL,            -- 0.0 to 1.0 confidence score
+    conditions_met TEXT NOT NULL, -- JSON array of conditions that triggered
+    market_data  TEXT,            -- JSON snapshot of relevant market data
+    timestamp    TEXT NOT NULL,   -- ISO8601
+    trade_id     INTEGER,         -- Link to sim_trades if action taken
+    outcome      TEXT,            -- 'success', 'failure', 'pending', null
+    outcome_price REAL,
+    outcome_time TEXT,
+    notes        TEXT,            -- Additional notes or LLM analysis
+    FOREIGN KEY (strategy_id) REFERENCES strategies(id),
+    FOREIGN KEY (trade_id) REFERENCES sim_trades(id)
+);
+"""
+
 async def get_db():
     """Return a singleton connection (FastAPI will reuse it)."""
     if not hasattr(get_db, "conn"):
@@ -123,6 +148,7 @@ async def get_db():
         await get_db.conn.execute(CREATE_INDICATORS_TABLE)
         await get_db.conn.execute(CREATE_INDICATOR_DATA_TABLE)
         await get_db.conn.execute(CREATE_STRATEGY_STATES_TABLE)
+        await get_db.conn.execute(CREATE_STRATEGY_TRIGGERS_TABLE)
     return get_db.conn
 
 async def log_event(event_type: str, payload: dict):
@@ -130,4 +156,111 @@ async def log_event(event_type: str, payload: dict):
     await conn.execute(
         "INSERT INTO events (ts, event_type, payload) VALUES (datetime('now'), ?, ?)",
         (event_type, json.dumps(payload)),
-    ) 
+    )
+
+async def log_strategy_trigger(
+    strategy_id: int,
+    strategy_name: str,
+    strategy_type: str,
+    symbol: str,
+    timeframe: str,
+    trigger_type: str,
+    side: str = None,
+    price: float = None,
+    confidence: float = None,
+    conditions_met: list = None,
+    market_data: dict = None,
+    trade_id: int = None,
+    notes: str = None
+):
+    """Log a strategy trigger event."""
+    conn = await get_db()
+    await conn.execute("""
+        INSERT INTO strategy_triggers (
+            strategy_id, strategy_name, strategy_type, symbol, timeframe,
+            trigger_type, side, price, confidence, conditions_met,
+            market_data, timestamp, trade_id, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)
+    """, (
+        strategy_id, strategy_name, strategy_type, symbol, timeframe,
+        trigger_type, side, price, confidence, json.dumps(conditions_met or []),
+        json.dumps(market_data or {}), trade_id, notes
+    ))
+
+async def get_strategy_triggers(
+    strategy_id: int = None,
+    strategy_name: str = None,
+    strategy_type: str = None,
+    symbol: str = None,
+    timeframe: str = None,
+    trigger_type: str = None,
+    side: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    limit: int = 100
+):
+    """Get strategy triggers with optional filters."""
+    conn = await get_db()
+    
+    query = "SELECT * FROM strategy_triggers WHERE 1=1"
+    params = []
+    
+    if strategy_id:
+        query += " AND strategy_id = ?"
+        params.append(strategy_id)
+    
+    if strategy_name:
+        query += " AND strategy_name LIKE ?"
+        params.append(f"%{strategy_name}%")
+    
+    if strategy_type:
+        query += " AND strategy_type = ?"
+        params.append(strategy_type)
+    
+    if symbol:
+        query += " AND symbol = ?"
+        params.append(symbol)
+    
+    if timeframe:
+        query += " AND timeframe = ?"
+        params.append(timeframe)
+    
+    if trigger_type:
+        query += " AND trigger_type = ?"
+        params.append(trigger_type)
+    
+    if side:
+        query += " AND side = ?"
+        params.append(side)
+    
+    if start_date:
+        query += " AND timestamp >= ?"
+        params.append(start_date)
+    
+    if end_date:
+        query += " AND timestamp <= ?"
+        params.append(end_date)
+    
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    
+    cursor = await conn.execute(query, params)
+    rows = await cursor.fetchall()
+    
+    # Convert to list of dicts
+    columns = [description[0] for description in cursor.description]
+    return [dict(zip(columns, row)) for row in rows]
+
+async def update_trigger_outcome(
+    trigger_id: int,
+    outcome: str,
+    outcome_price: float = None,
+    outcome_time: str = None
+):
+    """Update the outcome of a strategy trigger."""
+    conn = await get_db()
+    await conn.execute("""
+        UPDATE strategy_triggers 
+        SET outcome = ?, outcome_price = ?, outcome_time = ?
+        WHERE id = ?
+    """, (outcome, outcome_price, outcome_time or "datetime('now')", trigger_id)) 

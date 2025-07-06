@@ -3,7 +3,7 @@ import asyncio
 import json
 import httpx
 import os
-from database import log_event, get_db
+from database import log_event, get_db, log_strategy_trigger, get_strategy_triggers, update_trigger_outcome
 from llm import get_cost_comparison
 from data_feeds import get_data_feed
 from trade_logger import trade_logger, TradeSide
@@ -690,4 +690,141 @@ async def evaluate_conviction_arrow(outcome_id: int, success: bool, notes: str =
         return {"status": "success", "message": f"Recorded {outcome_id} as {'success' if success else 'failure'}"}
     except Exception as e:
         await log_event("conviction_arrow_evaluation_error", {"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to record evaluation: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to record evaluation: {str(e)}")
+
+# Strategy Triggers Endpoints
+@app.get("/strategy-triggers")
+async def get_strategy_triggers_endpoint(
+    strategy_id: int = None,
+    strategy_name: str = None,
+    symbol: str = None,
+    timeframe: str = None,
+    trigger_type: str = None,
+    side: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    limit: int = 100
+):
+    """Get strategy triggers with optional filters."""
+    try:
+        triggers = await get_strategy_triggers(
+            strategy_id=strategy_id,
+            strategy_name=strategy_name,
+            symbol=symbol,
+            timeframe=timeframe,
+            trigger_type=trigger_type,
+            side=side,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit
+        )
+        return {
+            "triggers": triggers,
+            "count": len(triggers),
+            "filters": {
+                "strategy_id": strategy_id,
+                "strategy_name": strategy_name,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "trigger_type": trigger_type,
+                "side": side,
+                "start_date": start_date,
+                "end_date": end_date,
+                "limit": limit
+            }
+        }
+    except Exception as e:
+        await log_event("strategy_triggers_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to get strategy triggers: {str(e)}")
+
+@app.get("/strategy-triggers/{trigger_id}")
+async def get_strategy_trigger_by_id(trigger_id: int):
+    """Get a specific strategy trigger by ID."""
+    try:
+        conn = await get_db()
+        cursor = await conn.execute(
+            "SELECT * FROM strategy_triggers WHERE id = ?",
+            (trigger_id,)
+        )
+        trigger = await cursor.fetchone()
+        
+        if not trigger:
+            raise HTTPException(status_code=404, detail="Strategy trigger not found")
+        
+        # Convert to dict
+        columns = [description[0] for description in cursor.description]
+        trigger_dict = dict(zip(columns, trigger))
+        
+        # Parse JSON fields
+        try:
+            trigger_dict["conditions_met"] = json.loads(trigger_dict["conditions_met"]) if trigger_dict["conditions_met"] else []
+            trigger_dict["market_data"] = json.loads(trigger_dict["market_data"]) if trigger_dict["market_data"] else {}
+        except:
+            trigger_dict["conditions_met"] = []
+            trigger_dict["market_data"] = {}
+        
+        return trigger_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        await log_event("strategy_trigger_error", {"error": str(e), "trigger_id": trigger_id})
+        raise HTTPException(status_code=500, detail=f"Failed to get strategy trigger: {str(e)}")
+
+@app.put("/strategy-triggers/{trigger_id}/outcome")
+async def update_strategy_trigger_outcome(
+    trigger_id: int,
+    outcome: str,
+    outcome_price: float = None,
+    outcome_time: str = None
+):
+    """Update the outcome of a strategy trigger."""
+    try:
+        await update_trigger_outcome(trigger_id, outcome, outcome_price, outcome_time)
+        return {"status": "success", "message": f"Updated trigger {trigger_id} outcome to {outcome}"}
+    except Exception as e:
+        await log_event("strategy_trigger_outcome_error", {"error": str(e), "trigger_id": trigger_id})
+        raise HTTPException(status_code=500, detail=f"Failed to update trigger outcome: {str(e)}")
+
+@app.get("/strategy-triggers/analytics/summary")
+async def get_strategy_triggers_summary():
+    """Get summary analytics for strategy triggers."""
+    try:
+        conn = await get_db()
+        
+        # Get total triggers
+        cursor = await conn.execute("SELECT COUNT(*) FROM strategy_triggers")
+        total_triggers = (await cursor.fetchone())[0]
+        
+        # Get triggers by strategy type
+        cursor = await conn.execute("""
+            SELECT strategy_type, COUNT(*) as count 
+            FROM strategy_triggers 
+            GROUP BY strategy_type
+        """)
+        by_strategy_type = {row[0]: row[1] for row in await cursor.fetchall()}
+        
+        # Get triggers by outcome
+        cursor = await conn.execute("""
+            SELECT outcome, COUNT(*) as count 
+            FROM strategy_triggers 
+            WHERE outcome IS NOT NULL
+            GROUP BY outcome
+        """)
+        by_outcome = {row[0]: row[1] for row in await cursor.fetchall()}
+        
+        # Get recent triggers (last 24 hours)
+        cursor = await conn.execute("""
+            SELECT COUNT(*) FROM strategy_triggers 
+            WHERE timestamp >= datetime('now', '-1 day')
+        """)
+        recent_triggers = (await cursor.fetchone())[0]
+        
+        return {
+            "total_triggers": total_triggers,
+            "recent_triggers_24h": recent_triggers,
+            "by_strategy_type": by_strategy_type,
+            "by_outcome": by_outcome
+        }
+    except Exception as e:
+        await log_event("strategy_triggers_analytics_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}") 
