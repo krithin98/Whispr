@@ -25,6 +25,22 @@ CREATE TABLE IF NOT EXISTS rules (
 );
 """
 
+CREATE_SIM_TRADES_TABLE = """
+CREATE TABLE IF NOT EXISTS sim_trades (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol       TEXT NOT NULL,
+    side         TEXT NOT NULL,   -- 'buy' or 'sell'
+    quantity     INTEGER NOT NULL,
+    entry_price  REAL NOT NULL,
+    exit_price   REAL,
+    entry_time   TEXT NOT NULL,
+    exit_time    TEXT,
+    status       TEXT NOT NULL,   -- 'open', 'closed', 'cancelled'
+    pnl          REAL,
+    pnl_percent  REAL
+);
+"""
+
 async def get_db():
     """Return a singleton connection (FastAPI will reuse it)."""
     if not hasattr(get_db, "conn"):
@@ -32,6 +48,7 @@ async def get_db():
         # Create tables separately
         await get_db.conn.execute(CREATE_EVENTS_TABLE)
         await get_db.conn.execute(CREATE_RULES_TABLE)
+        await get_db.conn.execute(CREATE_SIM_TRADES_TABLE)
     return get_db.conn
 
 async def log_event(event_type: str, payload: dict):

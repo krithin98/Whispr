@@ -53,7 +53,8 @@ def safe_eval(expr: str, ctx: dict):
 async def load_rules():
     """Load all active rules from the database."""
     conn = await get_db()
-    rows = await conn.execute_fetchall("SELECT id, name, trigger_expr, prompt_tpl FROM rules WHERE is_active=1")
+    cursor = await conn.execute("SELECT id, name, trigger_expr, prompt_tpl FROM rules WHERE is_active=1")
+    rows = await cursor.fetchall()
     return [dict(zip(("id", "name", "expr", "tpl"), r)) for r in rows]
 
 async def check_rules(tick):
@@ -89,11 +90,126 @@ async def seed_test_rules():
     conn = await get_db()
     for name, expr, tpl in test_rules:
         # Check if rule already exists
-        existing = await conn.execute_fetchall(
-            "SELECT id FROM rules WHERE name = ?", (name,)
-        )
+        cursor = await conn.execute("SELECT id FROM rules WHERE name = ?", (name,))
+        existing = await cursor.fetchall()
         if not existing:
             await conn.execute(
                 "INSERT INTO rules (name, trigger_expr, prompt_tpl) VALUES (?, ?, ?)",
                 (name, expr, tpl)
-            ) 
+            )
+
+async def create_rule(name: str, trigger_expr: str, prompt_tpl: str):
+    """Create a new rule. Returns the created rule."""
+    conn = await get_db()
+    
+    # Check if rule name already exists
+    cursor = await conn.execute("SELECT id FROM rules WHERE name = ?", (name,))
+    existing = await cursor.fetchall()
+    if existing:
+        raise ValueError(f"Rule with name '{name}' already exists")
+    
+    # Insert the new rule
+    cursor = await conn.execute(
+        "INSERT INTO rules (name, trigger_expr, prompt_tpl, is_active) VALUES (?, ?, ?, ?)",
+        (name, trigger_expr, prompt_tpl, True)
+    )
+    
+    # Get the created rule
+    rule_id = cursor.lastrowid
+    cursor = await conn.execute(
+        "SELECT id, name, trigger_expr, prompt_tpl, is_active FROM rules WHERE id = ?",
+        (rule_id,)
+    )
+    rule = await cursor.fetchone()
+    
+    return dict(zip(("id", "name", "trigger_expr", "prompt_tpl", "is_active"), rule))
+
+async def get_rule_by_id(rule_id: int):
+    """Get a rule by ID. Returns None if not found."""
+    conn = await get_db()
+    cursor = await conn.execute(
+        "SELECT id, name, trigger_expr, prompt_tpl, is_active FROM rules WHERE id = ?",
+        (rule_id,)
+    )
+    rule = await cursor.fetchone()
+    
+    if rule:
+        return dict(zip(("id", "name", "trigger_expr", "prompt_tpl", "is_active"), rule))
+    return None
+
+async def update_rule(rule_id: int, name: str = None, trigger_expr: str = None, prompt_tpl: str = None):
+    """Update a rule. Returns the updated rule."""
+    conn = await get_db()
+    
+    # Check if rule exists
+    existing = await get_rule_by_id(rule_id)
+    if not existing:
+        raise ValueError(f"Rule with id {rule_id} not found")
+    
+    # Build update query dynamically
+    updates = []
+    params = []
+    
+    if name is not None:
+        # Check if new name conflicts with existing rule
+        cursor = await conn.execute(
+            "SELECT id FROM rules WHERE name = ? AND id != ?", (name, rule_id)
+        )
+        name_conflict = await cursor.fetchall()
+        if name_conflict:
+            raise ValueError(f"Rule with name '{name}' already exists")
+        updates.append("name = ?")
+        params.append(name)
+    
+    if trigger_expr is not None:
+        updates.append("trigger_expr = ?")
+        params.append(trigger_expr)
+    
+    if prompt_tpl is not None:
+        updates.append("prompt_tpl = ?")
+        params.append(prompt_tpl)
+    
+    if not updates:
+        return existing  # No changes
+    
+    # Execute update
+    params.append(rule_id)
+    await conn.execute(
+        f"UPDATE rules SET {', '.join(updates)} WHERE id = ?",
+        params
+    )
+    
+    # Return updated rule
+    return await get_rule_by_id(rule_id)
+
+async def delete_rule(rule_id: int):
+    """Delete a rule. Returns the deleted rule."""
+    conn = await get_db()
+    
+    # Get the rule before deleting
+    rule = await get_rule_by_id(rule_id)
+    if not rule:
+        raise ValueError(f"Rule with id {rule_id} not found")
+    
+    # Delete the rule
+    await conn.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
+    
+    return rule
+
+async def toggle_rule(rule_id: int, is_active: bool):
+    """Toggle a rule's active status. Returns the updated rule."""
+    conn = await get_db()
+    
+    # Check if rule exists
+    existing = await get_rule_by_id(rule_id)
+    if not existing:
+        raise ValueError(f"Rule with id {rule_id} not found")
+    
+    # Update the status
+    await conn.execute(
+        "UPDATE rules SET is_active = ? WHERE id = ?",
+        (is_active, rule_id)
+    )
+    
+    # Return updated rule
+    return await get_rule_by_id(rule_id) 

@@ -16,6 +16,7 @@ Open http://localhost:8000 for a health-check and test the WebSocket at ws://loc
 - ✅ **Step 2**: SQLite journaling with persistent database
 - ✅ **Step 3**: Rule engine with AI suggestions
 - ✅ **Cost-effective LLM**: Groq Llama-3 8B integration (10-20x cheaper than GPT-4o)
+- ✅ **Week 1**: Schwab data feed integration + dry-run trade logging
 
 ## API Endpoints
 
@@ -24,6 +25,11 @@ Open http://localhost:8000 for a health-check and test the WebSocket at ws://loc
 - `GET /costs` - Compare LLM costs across providers
 - `GET /rules` - View all active rules
 - `WS /ws/ticks` - Real-time tick stream with AI suggestions
+- `POST /trades` - Place simulated trade
+- `GET /trades/open` - Get open trades
+- `GET /trades/closed` - Get closed trades
+- `POST /trades/{id}/close` - Close trade
+- `GET /trades/performance` - Get performance metrics
 
 ## WebSocket Messages
 
@@ -62,6 +68,29 @@ The system comes with 3 test rules:
 
 **Easy upgrade path**: Change `LLM_PROVIDER=openai` and `LLM_MODEL=gpt-4o-mini` in `.env`
 
+## Week 1 Implementation: Real Data + Trade Logging
+
+### Data Feed Integration
+- **Schwab Simulation**: Realistic market data patterns with volatility
+- **Configurable**: Switch between simulated and real data via `USE_REAL_DATA`
+- **Symbol Support**: Trade any symbol (default: SPY)
+
+### Dry-Run Trade Logger
+- **Simulated Trades**: Track P&L without risking real money
+- **Performance Metrics**: Win rate, total P&L, max win/loss
+- **Trade History**: Complete audit trail of all trades
+- **Live Mode Ready**: Easy switch to real trading later
+
+### Environment Configuration
+```bash
+# Data Feed
+USE_REAL_DATA=false          # Set to true for real Schwab data
+TRADING_SYMBOL=SPY          # Trading symbol
+
+# Trading Mode
+LIVE_TRADING=false          # Set to true for real orders
+```
+
 ## Cost Comparison
 
 | Model | Input Cost | Output Cost | vs Groq 8B |
@@ -76,4 +105,7 @@ The system comes with 3 test rules:
 2. **Connect WebSocket**: You'll see ticks and AI suggestions when rules trigger
 3. **Check events**: `curl http://localhost:8000/last_events?limit=10`
 4. **View rules**: `curl http://localhost:8000/rules`
-5. **Monitor costs**: `curl http://localhost:8000/costs` 
+5. **Monitor costs**: `curl http://localhost:8000/costs`
+6. **Test trades**: `curl -X POST 'http://localhost:8000/trades?symbol=SPY&side=buy&quantity=100&price=450.50'`
+7. **Check performance**: `curl http://localhost:8000/trades/performance`
+8. **Run Week 1 test**: `python test_week1.py` 
