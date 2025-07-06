@@ -66,16 +66,16 @@ async def test_trade_logging():
         else:
             print(f"❌ Failed to place trade: {buy_response.text}")
 
-async def test_rules_and_events():
-    """Test rules and events system."""
-    print("\n📊 Testing rules and events...")
+async def test_strategies_and_events():
+    """Test strategies and events system."""
+    print("\n📊 Testing strategies and events...")
     
     async with httpx.AsyncClient() as client:
-        # Get rules
-        rules_response = await client.get("http://localhost:8000/rules")
-        if rules_response.status_code == 200:
-            rules = rules_response.json()
-            print(f"✅ Loaded {len(rules)} rules")
+        # Get strategies
+        strategies_response = await client.get("http://localhost:8000/strategies")
+        if strategies_response.status_code == 200:
+            strategies = strategies_response.json()
+            print(f"✅ Loaded {len(strategies)} strategies")
         
         # Get recent events
         events_response = await client.get("http://localhost:8000/last_events?limit=5")
@@ -97,7 +97,7 @@ async def main():
     try:
         await test_data_feed()
         await test_trade_logging()
-        await test_rules_and_events()
+        await test_strategies_and_events()
         
         print("\n" + "=" * 40)
         print("✅ Week 1 implementation test completed!")
