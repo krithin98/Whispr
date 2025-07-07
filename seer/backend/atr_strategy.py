@@ -17,7 +17,16 @@ class ATRStrategyGenerator:
             with open("data/atr_rule_specification.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            raise FileNotFoundError("atr_rule_specification.json not found")
+            # Try alternative paths for different service contexts
+            try:
+                with open("backend/data/atr_rule_specification.json", "r") as f:
+                    return json.load(f)
+            except FileNotFoundError:
+                try:
+                    with open("seer/backend/data/atr_rule_specification.json", "r") as f:
+                        return json.load(f)
+                except FileNotFoundError:
+                    raise FileNotFoundError("atr_rule_specification.json not found in any expected location")
     
     def _load_atr_levels(self) -> Dict[str, Any]:
         """Load ATR levels configuration."""
@@ -25,7 +34,16 @@ class ATRStrategyGenerator:
             with open("data/atr_levels.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            raise FileNotFoundError("atr_levels.json not found")
+            # Try alternative paths for different service contexts
+            try:
+                with open("backend/data/atr_levels.json", "r") as f:
+                    return json.load(f)
+            except FileNotFoundError:
+                try:
+                    with open("seer/backend/data/atr_levels.json", "r") as f:
+                        return json.load(f)
+                except FileNotFoundError:
+                    raise FileNotFoundError("atr_levels.json not found in any expected location")
     
     async def generate_atr_strategies(self):
         """Generate all ATR rules for all timeframes."""

@@ -1,13 +1,83 @@
 'use client';
 
 import * as React from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { useSeerData } from './hooks/useSeerData';
+import { formatCurrency, formatPercentage, formatDateTime, getStatusColor, getSideColor } from './api';
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import BacktestingPanel from "@/components/BacktestingPanel";
 
 export default function DashboardPage() {
   const [selectedSection, setSelectedSection] = React.useState<string | null>(null);
+  const [editingStrategy, setEditingStrategy] = React.useState<any>(null);
+  const [isAddingStrategy, setIsAddingStrategy] = React.useState(false);
+  const seerData = useSeerData();
 
   const handleSectionClick = (section: string) => {
     setSelectedSection(section);
+  };
+
+  const handleEditStrategy = (strategy: any) => {
+    setEditingStrategy(strategy);
+    setIsAddingStrategy(false);
+  };
+
+  const handleAddStrategy = () => {
+    setEditingStrategy(null);
+    setIsAddingStrategy(true);
+  };
+
+  const handleSaveStrategy = async (formData: any) => {
+    try {
+      if (isAddingStrategy) {
+        await seerData.createStrategy({
+          name: formData.name,
+          description: formData.description || '',
+          strategy_type: formData.strategy_type || 'standard',
+          conditions: formData.conditions || '',
+          is_active: true
+        });
+      } else {
+        await seerData.updateStrategy(editingStrategy.id, {
+          name: formData.name,
+          description: formData.description || '',
+          strategy_type: formData.strategy_type || 'standard',
+          conditions: formData.conditions || '',
+          is_active: formData.is_active
+        });
+      }
+      setEditingStrategy(null);
+      setIsAddingStrategy(false);
+    } catch (error) {
+      console.error('Failed to save strategy:', error);
+      alert('Failed to save strategy');
+    }
+  };
+
+  const handleDeleteStrategy = async (strategyId: number) => {
+    if (confirm('Are you sure you want to delete this strategy?')) {
+      try {
+        await seerData.deleteStrategy(strategyId);
+      } catch (error) {
+        console.error('Failed to delete strategy:', error);
+        alert('Failed to delete strategy');
+      }
+    }
+  };
+
+  const handleToggleStrategy = async (strategyId: number) => {
+    try {
+      await seerData.toggleStrategy(strategyId);
+    } catch (error) {
+      console.error('Failed to toggle strategy:', error);
+      alert('Failed to toggle strategy');
+    }
   };
 
   return (
@@ -22,6 +92,7 @@ export default function DashboardPage() {
           <a href="#" className="text-gray-200 hover:text-blue-400 font-semibold transition">Dashboard</a>
           <a href="#" className="text-gray-400 hover:text-blue-400 transition">Rules</a>
           <a href="#" className="text-gray-400 hover:text-blue-400 transition">Trades</a>
+          <a href="#" className="text-gray-400 hover:text-blue-400 transition">Backtesting</a>
           <a href="#" className="text-gray-400 hover:text-blue-400 transition">Replay</a>
         </nav>
         <div className="mt-auto text-xs text-gray-500 pt-10">v0.1 MVP</div>
@@ -32,223 +103,444 @@ export default function DashboardPage() {
         {/* Header */}
         <header className="h-20 bg-gradient-to-r from-gray-950 to-gray-800 shadow flex items-center px-12 justify-between rounded-bl-3xl border-b border-gray-700">
           <div className="text-2xl font-bold text-white tracking-tight">Dashboard</div>
-          <Dialog.Root>
-            <Dialog.Trigger asChild>
+          <Dialog>
+            <DialogTrigger asChild>
               <button className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold shadow hover:bg-blue-700 transition">Open Dialog</button>
-            </Dialog.Trigger>
-            <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-              <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-8 rounded-2xl shadow-2xl z-50 w-96">
-                <Dialog.Title className="text-xl font-bold mb-2">Radix UI Dialog</Dialog.Title>
-                <Dialog.Description className="mb-4 text-gray-500">This is a placeholder dialog using Radix UI.</Dialog.Description>
-                <Dialog.Close asChild>
-                  <button className="mt-2 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Close</button>
-                </Dialog.Close>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
+            </DialogTrigger>
+            <DialogContent className="bg-gray-900 text-white p-8 rounded-2xl shadow-2xl z-50 w-96 border border-gray-700">
+              <DialogTitle className="text-xl font-bold mb-2">Radix UI Dialog</DialogTitle>
+              <DialogDescription className="mb-4 text-gray-400">This is a placeholder dialog using shadcn/ui.</DialogDescription>
+              <DialogClose asChild>
+                <button className="mt-2 px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600">Close</button>
+              </DialogClose>
+            </DialogContent>
+          </Dialog>
         </header>
 
         {/* Dashboard Content */}
         <main className="flex-1 p-10 grid grid-cols-1 md:grid-cols-3 gap-10">
           {/* Live Price Widget */}
-          <section 
-            className="bg-gradient-to-br from-blue-900 to-blue-700 rounded-2xl shadow-xl p-8 flex flex-col items-center justify-center border border-blue-800 cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-2xl hover:border-blue-600"
-            onClick={() => handleSectionClick('live-price')}
-          >
-            <div className="text-gray-200 text-base mb-2">Live Price</div>
-            <div className="text-4xl font-extrabold text-white drop-shadow">$4,505.23</div>
-            <div className="text-xs text-blue-200 mt-1">(Simulated)</div>
-            <div className="text-xs text-blue-300 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">Click to view details</div>
-          </section>
+          <Card className="col-span-1 flex flex-col items-center justify-center cursor-pointer bg-gradient-to-br from-blue-900 to-blue-700 text-white shadow-xl rounded-2xl border border-blue-800 hover:shadow-2xl transition-all duration-200" onClick={() => handleSectionClick('live-price')}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-white text-base mb-2">
+                Live Price
+                <div className={`w-2 h-2 rounded-full ${seerData.isConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center">
+              {seerData.livePrice ? (
+                <>
+                  <div className="text-4xl font-extrabold text-white drop-shadow">
+                    {formatCurrency(seerData.livePrice.price)}
+                  </div>
+                  <div className={`text-sm font-semibold ${seerData.livePrice.change >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                    {formatPercentage(seerData.livePrice.change_percent)}
+                  </div>
+                  <div className="text-xs text-blue-200 mt-1">{seerData.livePrice.symbol}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl font-extrabold text-white drop-shadow">--</div>
+                  <div className="text-xs text-blue-200 mt-1">Connecting...</div>
+                </>
+              )}
+              <div className="text-xs text-blue-300 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">Click to view details</div>
+            </CardContent>
+          </Card>
 
-          {/* Rules Table Placeholder */}
-          <section 
-            className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl shadow-xl p-8 col-span-2 border border-gray-700 cursor-pointer transform transition-all duration-200 hover:scale-[1.02] hover:shadow-2xl hover:border-gray-600"
-            onClick={() => handleSectionClick('rules')}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-gray-300 text-base font-semibold">Active Rules</div>
-              <div className="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">Click to manage rules</div>
-            </div>
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="py-1">Name</th>
-                  <th className="py-1">Expression</th>
-                  <th className="py-1">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="hover:bg-gray-900/40 transition">
-                  <td className="py-2 font-medium text-white">High price ping</td>
-                  <td className="py-2 text-blue-200">value &gt;= 105</td>
-                  <td className="py-2 text-green-400 font-semibold">Active</td>
-                </tr>
-                <tr className="hover:bg-gray-900/40 transition">
-                  <td className="py-2 font-medium text-white">Low price alert</td>
-                  <td className="py-2 text-blue-200">value &lt;= 95</td>
-                  <td className="py-2 text-green-400 font-semibold">Active</td>
-                </tr>
-                <tr className="hover:bg-gray-900/40 transition">
-                  <td className="py-2 font-medium text-white">Tick milestone</td>
-                  <td className="py-2 text-blue-200">tick % 10 == 0</td>
-                  <td className="py-2 text-green-400 font-semibold">Active</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          {/* Strategies Section */}
+          <Card className="col-span-2 cursor-pointer bg-gradient-to-br from-gray-800 to-gray-700 text-white shadow-xl rounded-2xl border border-gray-700 hover:shadow-2xl transition-all duration-200" onClick={() => handleSectionClick('strategies')}>
+            <CardHeader>
+              <CardTitle className="text-white text-base font-semibold">Active Strategies</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {seerData.strategiesLoading ? (
+                <div className="text-gray-400 text-center py-8">Loading strategies...</div>
+              ) : seerData.strategiesError ? (
+                <div className="text-red-400 text-center py-8">Error: {seerData.strategiesError}</div>
+              ) : (
+                <Table className="w-full text-left text-white">
+                  <TableHeader className="bg-gray-900">
+                    <TableRow>
+                      <TableHead className="text-gray-400">Name</TableHead>
+                      <TableHead className="text-gray-400">Type</TableHead>
+                      <TableHead className="text-gray-400">Status</TableHead>
+                      <TableHead className="text-gray-400">Triggers</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {seerData.strategies.slice(0, 5).map((strategy) => (
+                      <TableRow key={strategy.id} className="hover:bg-gray-900/40 transition">
+                        <TableCell className="font-medium text-white">{strategy.name}</TableCell>
+                        <TableCell className="text-blue-200">{strategy.strategy_type || 'standard'}</TableCell>
+                        <TableCell className={`font-semibold ${getStatusColor(strategy.is_active ? 'active' : 'inactive')}`}>{strategy.is_active ? 'Active' : 'Inactive'}</TableCell>
+                        <TableCell className="text-gray-300">{seerData.recentTriggers.filter(t => t.strategy_id === strategy.id).length}</TableCell>
+                      </TableRow>
+                    ))}
+                    {seerData.strategies.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="py-4 text-center text-gray-400">No strategies found</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Trades Table Placeholder */}
-          <section 
-            className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl shadow-xl p-8 col-span-3 border border-gray-700 cursor-pointer transform transition-all duration-200 hover:scale-[1.01] hover:shadow-2xl hover:border-gray-600"
-            onClick={() => handleSectionClick('trades')}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-gray-300 text-base font-semibold">Recent Trades</div>
-              <div className="text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">Click to view full trade history</div>
-            </div>
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-xs text-gray-400">
-                  <th className="py-1">Time</th>
-                  <th className="py-1">Side</th>
-                  <th className="py-1">Qty</th>
-                  <th className="py-1">Entry</th>
-                  <th className="py-1">Exit</th>
-                  <th className="py-1">P&L</th>
-                  <th className="py-1">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="hover:bg-gray-900/40 transition">
-                  <td className="py-2 text-white">2025-07-06 10:30</td>
-                  <td className="py-2 text-blue-400 font-semibold">Buy</td>
-                  <td className="py-2 text-white">100</td>
-                  <td className="py-2 text-white">450.50</td>
-                  <td className="py-2 text-white">451.25</td>
-                  <td className="py-2 text-green-400 font-semibold">+75.00</td>
-                  <td className="py-2 text-green-400 font-semibold">Closed</td>
-                </tr>
-                <tr className="hover:bg-gray-900/40 transition">
-                  <td className="py-2 text-white">2025-07-06 10:15</td>
-                  <td className="py-2 text-red-400 font-semibold">Sell</td>
-                  <td className="py-2 text-white">50</td>
-                  <td className="py-2 text-white">452.00</td>
-                  <td className="py-2 text-white">451.00</td>
-                  <td className="py-2 text-red-400 font-semibold">-50.00</td>
-                  <td className="py-2 text-green-400 font-semibold">Closed</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
+          {/* Trades Section */}
+          <Card className="col-span-3 cursor-pointer bg-gradient-to-br from-gray-800 to-gray-700 text-white shadow-xl rounded-2xl border border-gray-700 hover:shadow-2xl transition-all duration-200" onClick={() => handleSectionClick('trades')}>
+            <CardHeader>
+              <CardTitle className="text-white text-base font-semibold">Recent Trades</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {seerData.tradesLoading ? (
+                <div className="text-gray-400 text-center py-8">Loading trades...</div>
+              ) : seerData.tradesError ? (
+                <div className="text-red-400 text-center py-8">Error: {seerData.tradesError}</div>
+              ) : (
+                <Table className="w-full text-left text-white">
+                  <TableHeader className="bg-gray-900">
+                    <TableRow>
+                      <TableHead className="text-gray-400">Time</TableHead>
+                      <TableHead className="text-gray-400">Side</TableHead>
+                      <TableHead className="text-gray-400">Qty</TableHead>
+                      <TableHead className="text-gray-400">Entry</TableHead>
+                      <TableHead className="text-gray-400">Exit</TableHead>
+                      <TableHead className="text-gray-400">P&L</TableHead>
+                      <TableHead className="text-gray-400">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...seerData.openTrades, ...seerData.closedTrades.slice(0, 3)].map((trade) => (
+                      <TableRow key={trade.id} className="hover:bg-gray-900/40 transition">
+                        <TableCell>{formatDateTime(trade.created_at)}</TableCell>
+                        <TableCell className={getSideColor(trade.side)}>{trade.side.toUpperCase()}</TableCell>
+                        <TableCell>{trade.quantity}</TableCell>
+                        <TableCell>{formatCurrency(trade.entry_price)}</TableCell>
+                        <TableCell>{trade.exit_price ? formatCurrency(trade.exit_price) : '--'}</TableCell>
+                        <TableCell className={trade.pnl && trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>{trade.pnl ? formatCurrency(trade.pnl) : '--'}</TableCell>
+                        <TableCell className={getStatusColor(trade.status)}>{trade.status.toUpperCase()}</TableCell>
+                      </TableRow>
+                    ))}
+                    {seerData.openTrades.length === 0 && seerData.closedTrades.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-4 text-center text-gray-400">No trades found</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </main>
       </div>
 
       {/* Section Detail Modal */}
-      <Dialog.Root open={!!selectedSection} onOpenChange={() => setSelectedSection(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60 z-40" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800 p-8 rounded-2xl shadow-2xl z-50 w-[600px] max-h-[80vh] overflow-y-auto border border-gray-700">
-            <Dialog.Title className="text-2xl font-bold text-white mb-4">
-              {selectedSection === 'live-price' && 'Live Price Details'}
-              {selectedSection === 'rules' && 'Rules Management'}
-              {selectedSection === 'trades' && 'Trade History'}
-            </Dialog.Title>
-            <Dialog.Description className="mb-6 text-gray-300">
-              {selectedSection === 'live-price' && 'Detailed view of current market prices and indicators.'}
-              {selectedSection === 'rules' && 'Manage your trading rules and conditions.'}
-              {selectedSection === 'trades' && 'Complete history of all trades and performance metrics.'}
-            </Dialog.Description>
-            
-            <div className="text-gray-300">
-              {selectedSection === 'live-price' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-700 p-4 rounded-lg">
-                      <div className="text-sm text-gray-400">Current Price</div>
-                      <div className="text-2xl font-bold text-white">$4,505.23</div>
-                    </div>
-                    <div className="bg-gray-700 p-4 rounded-lg">
-                      <div className="text-sm text-gray-400">24h Change</div>
-                      <div className="text-2xl font-bold text-green-400">+1.2%</div>
+      <Dialog open={!!selectedSection} onOpenChange={() => setSelectedSection(null)}>
+        <DialogContent className="bg-gray-900 text-white p-8 rounded-2xl shadow-2xl z-50 w-[600px] max-h-[80vh] overflow-y-auto border border-gray-700">
+          <DialogTitle className="text-2xl font-bold text-white mb-4">
+            {selectedSection === 'live-price' && 'Live Price Details'}
+            {selectedSection === 'strategies' && 'Strategy Management'}
+            {selectedSection === 'trades' && 'Trade History'}
+            {selectedSection === 'backtesting' && 'Strategy Backtesting'}
+          </DialogTitle>
+          <DialogDescription className="mb-6 text-gray-400">
+            {selectedSection === 'live-price' && 'Detailed view of current market prices and indicators.'}
+            {selectedSection === 'strategies' && 'Manage your trading strategies and conditions.'}
+            {selectedSection === 'trades' && 'Complete history of all trades and performance metrics.'}
+            {selectedSection === 'backtesting' && 'Test your strategies against historical data.'}
+          </DialogDescription>
+          <div className="text-gray-300">
+            {selectedSection === 'live-price' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-700 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400">Current Price</div>
+                    <div className="text-2xl font-bold text-white">
+                      {seerData.livePrice ? formatCurrency(seerData.livePrice.price) : '--'}
                     </div>
                   </div>
                   <div className="bg-gray-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400 mb-2">Technical Indicators</div>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div>RSI: 65.4</div>
-                      <div>MACD: Bullish</div>
-                      <div>ATR: 12.3</div>
+                    <div className="text-sm text-gray-400">24h Change</div>
+                    <div className={`text-2xl font-bold ${seerData.livePrice && seerData.livePrice.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {seerData.livePrice ? formatPercentage(seerData.livePrice.change_percent) : '--'}
                     </div>
                   </div>
                 </div>
-              )}
-              
-              {selectedSection === 'rules' && (
-                <div className="space-y-4">
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                    + Add New Rule
-                  </button>
-                  <div className="space-y-2">
-                    <div className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
-                      <div>
-                        <div className="font-medium text-white">High price ping</div>
-                        <div className="text-sm text-gray-400">value &gt;= 105</div>
+                {seerData.livePrice && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Bid</div>
+                        <div className="text-xl font-bold text-white">{formatCurrency(seerData.livePrice.bid)}</div>
                       </div>
-                      <div className="flex gap-2">
-                        <button className="bg-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-500">Edit</button>
-                        <button className="bg-red-600 px-3 py-1 rounded text-sm hover:bg-red-500">Delete</button>
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Ask</div>
+                        <div className="text-xl font-bold text-white">{formatCurrency(seerData.livePrice.ask)}</div>
                       </div>
-                    </div>
-                    <div className="bg-gray-700 p-4 rounded-lg flex justify-between items-center">
-                      <div>
-                        <div className="font-medium text-white">Low price alert</div>
-                        <div className="text-sm text-gray-400">value &lt;= 95</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button className="bg-gray-600 px-3 py-1 rounded text-sm hover:bg-gray-500">Edit</button>
-                        <button className="bg-red-600 px-3 py-1 rounded text-sm hover:bg-red-500">Delete</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {selectedSection === 'trades' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="bg-gray-700 p-4 rounded-lg">
-                      <div className="text-sm text-gray-400">Total Trades</div>
-                      <div className="text-2xl font-bold text-white">24</div>
                     </div>
                     <div className="bg-gray-700 p-4 rounded-lg">
-                      <div className="text-sm text-gray-400">Win Rate</div>
-                      <div className="text-2xl font-bold text-green-400">68%</div>
+                      <div className="text-sm text-gray-400 mb-2">Market Data</div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>Volume: {seerData.livePrice.volume.toLocaleString()}</div>
+                        <div>Symbol: {seerData.livePrice.symbol}</div>
+                        <div>Source: {seerData.livePrice.source}</div>
+                        <div>Connection: {seerData.isConnected ? 'Connected' : 'Disconnected'}</div>
+                      </div>
                     </div>
-                    <div className="bg-gray-700 p-4 rounded-lg">
-                      <div className="text-sm text-gray-400">Total P&L</div>
-                      <div className="text-2xl font-bold text-green-400">+$1,245</div>
-                    </div>
-                  </div>
-                  <div className="bg-gray-700 p-4 rounded-lg">
-                    <div className="text-sm text-gray-400 mb-2">Performance Chart</div>
-                    <div className="h-32 bg-gray-600 rounded flex items-center justify-center text-gray-400">
-                      Chart placeholder
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
+            )}
             
-            <Dialog.Close asChild>
-              <button className="mt-6 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition">
-                Close
-              </button>
-            </Dialog.Close>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+            {selectedSection === 'strategies' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Strategies ({seerData.strategies.length})</h3>
+                  <Button onClick={handleAddStrategy} className="bg-blue-600 hover:bg-blue-700">
+                    + Add New Strategy
+                  </Button>
+                </div>
+                
+                {seerData.strategiesLoading ? (
+                  <div className="text-gray-400 text-center py-8">Loading strategies...</div>
+                ) : seerData.strategiesError ? (
+                  <div className="text-red-400 text-center py-8">Error: {seerData.strategiesError}</div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {seerData.strategies.map((strategy) => (
+                      <div key={strategy.id} className="bg-gray-700 p-4 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-medium text-white">{strategy.name}</div>
+                            <div className="text-sm text-gray-400 mt-1">{strategy.prompt_tpl}</div>
+                            <div className="text-xs text-blue-300 mt-1">Type: {strategy.strategy_type || 'standard'}</div>
+                            <div className="text-xs text-gray-500 mt-1">Expression: {strategy.strategy_expression}</div>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                                                         <Button 
+                               size="sm"
+                               variant={strategy.is_active ? "destructive" : "default"}
+                               onClick={(e: React.MouseEvent) => {
+                                 e.stopPropagation();
+                                 handleToggleStrategy(strategy.id);
+                               }}
+                             >
+                              {strategy.is_active ? 'Disable' : 'Enable'}
+                            </Button>
+                                                         <Button 
+                               size="sm"
+                               variant="outline"
+                               onClick={(e: React.MouseEvent) => {
+                                 e.stopPropagation();
+                                 handleEditStrategy(strategy);
+                               }}
+                             >
+                              Edit
+                            </Button>
+                                                         <Button 
+                               size="sm"
+                               variant="destructive"
+                               onClick={(e: React.MouseEvent) => {
+                                 e.stopPropagation();
+                                 handleDeleteStrategy(strategy.id);
+                               }}
+                             >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {seerData.strategies.length === 0 && (
+                      <div className="text-gray-400 text-center py-8">No strategies found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {selectedSection === 'trades' && (
+              <div className="space-y-4">
+                {seerData.performanceLoading ? (
+                  <div className="text-gray-400 text-center py-8">Loading performance data...</div>
+                ) : seerData.performanceError ? (
+                  <div className="text-red-400 text-center py-8">Error: {seerData.performanceError}</div>
+                ) : seerData.performance ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Total Trades</div>
+                        <div className="text-2xl font-bold text-white">{seerData.performance.total_trades}</div>
+                      </div>
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Win Rate</div>
+                        <div className="text-2xl font-bold text-green-400">{seerData.performance.win_rate.toFixed(1)}%</div>
+                      </div>
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Total P&L</div>
+                        <div className={`text-2xl font-bold ${seerData.performance.total_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatCurrency(seerData.performance.total_pnl)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Average P&L</div>
+                        <div className={`text-xl font-bold ${seerData.performance.average_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatCurrency(seerData.performance.average_pnl)}
+                        </div>
+                      </div>
+                      <div className="bg-gray-700 p-4 rounded-lg">
+                        <div className="text-sm text-gray-400">Largest Win</div>
+                        <div className="text-xl font-bold text-green-400">{formatCurrency(seerData.performance.largest_win)}</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-gray-400 text-center py-8">No performance data available</div>
+                )}
+              </div>
+            )}
+            
+            {selectedSection === 'backtesting' && (
+              <div className="space-y-4">
+                <BacktestingPanel />
+              </div>
+            )}
+          </div>
+          
+          <DialogClose asChild>
+            <button className="mt-6 px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition">
+              Close
+            </button>
+          </DialogClose>
+        </DialogContent>
+      </Dialog>
+
+      {/* Strategy Edit/Add Modal */}
+      <Dialog open={!!editingStrategy || isAddingStrategy} onOpenChange={() => {
+        setEditingStrategy(null);
+        setIsAddingStrategy(false);
+      }}>
+        <DialogContent className="bg-gray-900 text-white p-8 rounded-2xl shadow-2xl z-50 w-[500px] border border-gray-700">
+          <DialogTitle className="text-xl font-bold text-white mb-4">
+            {isAddingStrategy ? 'Add New Strategy' : 'Edit Strategy'}
+          </DialogTitle>
+          <StrategyForm 
+            strategy={editingStrategy}
+            onSave={handleSaveStrategy}
+            onCancel={() => {
+              setEditingStrategy(null);
+              setIsAddingStrategy(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// Strategy Form Component
+function StrategyForm({ strategy, onSave, onCancel }: {
+  strategy: any;
+  onSave: (data: any) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = React.useState({
+    name: strategy?.name || '',
+    description: strategy?.description || '',
+    strategy_type: strategy?.strategy_type || 'standard',
+    conditions: strategy?.conditions || '',
+    is_active: strategy?.is_active ?? true
+  });
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await onSave(formData);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="name" className="text-white">Strategy Name</Label>
+        <Input
+          id="name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          className="bg-gray-800 border-gray-600 text-white"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="description" className="text-white">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          className="bg-gray-800 border-gray-600 text-white"
+          rows={3}
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="strategy_type" className="text-white">Strategy Type</Label>
+        <Select value={formData.strategy_type} onValueChange={(value) => setFormData({ ...formData, strategy_type: value })}>
+          <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-gray-800 border-gray-600">
+            <SelectItem value="standard">Standard</SelectItem>
+            <SelectItem value="atr_based">ATR Based</SelectItem>
+            <SelectItem value="vomy_ivomy">Vomy/iVomy</SelectItem>
+            <SelectItem value="po_dot">PO Dot</SelectItem>
+            <SelectItem value="conviction_arrow">Conviction Arrow</SelectItem>
+            <SelectItem value="golden_gate">Golden Gate</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <Label htmlFor="conditions" className="text-white">Conditions/Expression</Label>
+        <Textarea
+          id="conditions"
+          value={formData.conditions}
+          onChange={(e) => setFormData({ ...formData, conditions: e.target.value })}
+          className="bg-gray-800 border-gray-600 text-white"
+          rows={3}
+          placeholder="e.g., price > 100 && volume > 1000"
+        />
+      </div>
+      
+      {!strategy && (
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="is_active"
+            checked={formData.is_active}
+            onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+            className="rounded border-gray-600 bg-gray-800"
+          />
+          <Label htmlFor="is_active" className="text-white">Active</Label>
+        </div>
+      )}
+      
+      <div className="flex justify-end space-x-3 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? 'Saving...' : (strategy ? 'Update' : 'Create')}
+        </Button>
+      </div>
+    </form>
   );
 }

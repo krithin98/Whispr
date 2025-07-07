@@ -1,11 +1,12 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks
 import asyncio
 import json
 import httpx
 import os
+from datetime import datetime, timedelta
 from database import log_event, get_db, log_strategy_trigger, get_strategy_triggers, update_trigger_outcome
 from llm import get_cost_comparison
-from data_feeds import get_data_feed
+from data_feeds import get_data_feed, YFinanceFeed
 from trade_logger import trade_logger, TradeSide
 from indicators import gg_rule_generator
 from atr_strategy import atr_strategy_generator
@@ -13,11 +14,24 @@ from vomy_strategy import VomyStrategyGenerator, VomyStrategyEvaluator
 from four_h_po_dot_strategy import po_dot_strategy_generator
 from conviction_arrow_strategy import conviction_arrow_strategy
 from strategies import check_strategies, seed_test_strategies
+from backtesting import backtesting_engine, BacktestResult
+from indicator_service import get_indicator_service
+from data_providers import get_provider
 
 app = FastAPI(title="Seer UI Service", version="0.4.0")
 
+# --- CORS Middleware ---
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or ["http://localhost:3001"] for more security
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Rules engine service URL
-RULES_ENGINE_URL = "http://rules-engine:8001"
+RULES_ENGINE_URL = "http://localhost:8001"
 
 @app.on_event("startup")
 async def startup_event():
@@ -156,11 +170,11 @@ async def get_strategies():
     """Proxy to rules engine strategies endpoint."""
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"{RULES_ENGINE_URL}/rules")
+            response = await client.get(f"{RULES_ENGINE_URL}/strategies")
             if response.status_code == 200:
                 return response.json()
             else:
-                return {"error": "Failed to fetch rules from rules engine"}
+                return {"error": "Failed to fetch strategies from rules engine"}
         except Exception as e:
             return {"error": f"Rules engine connection failed: {str(e)}"}
 
@@ -827,4 +841,364 @@ async def get_strategy_triggers_summary():
         }
     except Exception as e:
         await log_event("strategy_triggers_analytics_error", {"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {str(e)}")
+
+# Backtesting Endpoints
+@app.post("/backtest/strategy")
+async def backtest_single_strategy(
+    strategy_id: int,
+    symbol: str = "SPY",
+    start_date: str = None,
+    end_date: str = None
+):
+    """Run backtest for a single strategy."""
+    try:
+        # Set default dates if not provided
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Run backtest
+        result = await backtesting_engine.backtest_strategy(strategy_id, symbol, start_date, end_date)
+        
+        # Convert to dict for JSON serialization
+        result_dict = {
+            "strategy_id": result.strategy_id,
+            "strategy_name": result.strategy_name,
+            "symbol": result.symbol,
+            "start_date": result.start_date,
+            "end_date": result.end_date,
+            "total_trades": result.total_trades,
+            "winning_trades": result.winning_trades,
+            "losing_trades": result.losing_trades,
+            "win_rate": result.win_rate,
+            "total_return": result.total_return,
+            "total_pnl": result.total_pnl,
+            "max_drawdown": result.max_drawdown,
+            "sharpe_ratio": result.sharpe_ratio,
+            "avg_trade_duration": result.avg_trade_duration,
+            "profit_factor": result.profit_factor,
+            "trades": result.trades,
+            "equity_curve": result.equity_curve
+        }
+        
+        await log_event("backtest_completed", {
+            "strategy_id": strategy_id,
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_return": result.total_return,
+            "win_rate": result.win_rate
+        })
+        
+        return result_dict
+        
+    except Exception as e:
+        await log_event("backtest_error", {"error": str(e), "strategy_id": strategy_id})
+        raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
+
+@app.post("/backtest/multiple")
+async def backtest_multiple_strategies(
+    strategy_ids: list[int],
+    symbol: str = "SPY",
+    start_date: str = None,
+    end_date: str = None
+):
+    """Run backtests for multiple strategies."""
+    try:
+        # Set default dates if not provided
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        if not end_date:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Run backtests
+        results = await backtesting_engine.backtest_multiple_strategies(strategy_ids, symbol, start_date, end_date)
+        
+        # Convert to dicts for JSON serialization
+        results_dict = []
+        for result in results:
+            result_dict = {
+                "strategy_id": result.strategy_id,
+                "strategy_name": result.strategy_name,
+                "symbol": result.symbol,
+                "start_date": result.start_date,
+                "end_date": result.end_date,
+                "total_trades": result.total_trades,
+                "winning_trades": result.winning_trades,
+                "losing_trades": result.losing_trades,
+                "win_rate": result.win_rate,
+                "total_return": result.total_return,
+                "total_pnl": result.total_pnl,
+                "max_drawdown": result.max_drawdown,
+                "sharpe_ratio": result.sharpe_ratio,
+                "avg_trade_duration": result.avg_trade_duration,
+                "profit_factor": result.profit_factor,
+                "trades": result.trades,
+                "equity_curve": result.equity_curve
+            }
+            results_dict.append(result_dict)
+        
+        await log_event("backtest_multiple_completed", {
+            "strategy_count": len(results),
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+        
+        return {
+            "results": results_dict,
+            "summary": {
+                "total_strategies": len(results),
+                "avg_return": sum(r["total_return"] for r in results_dict) / len(results_dict) if results_dict else 0,
+                "avg_win_rate": sum(r["win_rate"] for r in results_dict) / len(results_dict) if results_dict else 0,
+                "best_strategy": max(results_dict, key=lambda x: x["total_return"]) if results_dict else None,
+                "worst_strategy": min(results_dict, key=lambda x: x["total_return"]) if results_dict else None
+            }
+        }
+        
+    except Exception as e:
+        await log_event("backtest_multiple_error", {"error": str(e), "strategy_ids": strategy_ids})
+        raise HTTPException(status_code=500, detail=f"Multiple backtest failed: {str(e)}")
+
+@app.get("/backtest/strategies")
+async def get_backtestable_strategies():
+    """Get list of strategies available for backtesting."""
+    try:
+        conn = await get_db()
+        cursor = await conn.execute(
+            "SELECT id, name, strategy_type, prompt_tpl FROM strategies WHERE is_active = 1"
+        )
+        strategies = await cursor.fetchall()
+        
+        return {
+            "strategies": [
+                {
+                    "id": strategy[0],
+                    "name": strategy[1],
+                    "type": strategy[2],
+                    "description": strategy[3] or "No description"
+                }
+                for strategy in strategies
+            ]
+        }
+    except Exception as e:
+        await log_event("backtest_strategies_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to get strategies: {str(e)}")
+
+@app.get("/market-data/spy")
+async def get_spy_data():
+    """Get real-time SPY data from yfinance."""
+    try:
+        # Create YFinanceFeed instance
+        spy_feed = YFinanceFeed("SPY")
+        
+        # Get latest data
+        tick_data = await spy_feed.get_latest_data()
+        
+        if tick_data:
+            return {
+                "success": True,
+                "data": tick_data,
+                "source": "yfinance",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            # Fallback to simulated data
+            base_price = 450.0
+            change = (datetime.utcnow().timestamp() % 100 - 50) * 0.1
+            price = base_price + change
+            
+            fallback_data = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "symbol": "SPY",
+                "price": round(price, 2),
+                "volume": int(1000 + (datetime.utcnow().timestamp() % 1000) * 50),
+                "bid": round(price - 0.01, 2),
+                "ask": round(price + 0.01, 2),
+                "change": round(change, 2),
+                "change_percent": round((change / base_price) * 100, 3),
+                "open": round(price - 0.05, 2),
+                "high": round(price + 0.05, 2),
+                "low": round(price - 0.05, 2),
+                "tick_id": int(datetime.utcnow().timestamp() * 1000),
+                "source": "simulated_fallback"
+            }
+            
+            return {
+                "success": False,
+                "data": fallback_data,
+                "source": "simulated_fallback",
+                "message": "yfinance data unavailable, using simulated data",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+    except Exception as e:
+        await log_event("market_data_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to fetch SPY data: {str(e)}")
+
+@app.get("/market-data/historical/{symbol}")
+async def get_historical_data(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    interval: str = "1d"
+):
+    """Get historical data for a symbol using yfinance."""
+    try:
+        spy_feed = YFinanceFeed(symbol)
+        data = await spy_feed.get_historical_data(start_date, end_date, interval)
+        
+        if data.empty:
+            return {
+                "success": False,
+                "message": f"No historical data found for {symbol}",
+                "data": []
+            }
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date,
+            "interval": interval,
+            "data_points": len(data),
+            "data": data.to_dict('records')
+        }
+        
+    except Exception as e:
+        await log_event("historical_data_error", {
+            "symbol": symbol,
+            "error": str(e)
+        })
+        raise HTTPException(status_code=500, detail=f"Failed to fetch historical data: {str(e)}")
+
+# New Indicator Endpoints
+@app.get("/indicators/{symbol}")
+async def get_symbol_indicators(symbol: str, timeframe: str = None):
+    """Get all indicators for a symbol across all timeframes or a specific timeframe."""
+    try:
+        indicator_service = get_indicator_service()
+        
+        if timeframe:
+            # Get indicators for specific timeframe
+            data = await indicator_service.get_latest_indicators(symbol, timeframe)
+            if data:
+                return {"symbol": symbol, "timeframe": timeframe, "data": data}
+            else:
+                return {"error": f"No indicator data found for {symbol} on {timeframe}"}
+        else:
+            # Get indicators for all timeframes
+            all_timeframes = indicator_service.timeframes + indicator_service.trading_timeframes
+            results = {}
+            
+            for tf in all_timeframes:
+                data = await indicator_service.get_latest_indicators(symbol, tf)
+                if data:
+                    results[tf] = data
+            
+            return {"symbol": symbol, "timeframes": results}
+            
+    except Exception as e:
+        await log_event("get_indicators_error", {"error": str(e), "symbol": symbol})
+        return {"error": f"Failed to get indicators: {str(e)}"}
+
+@app.get("/indicators/{symbol}/atr")
+async def get_atr_indicators(symbol: str, timeframe: str = "1d"):
+    """Get ATR indicators for a symbol and timeframe."""
+    try:
+        indicator_service = get_indicator_service()
+        data = await indicator_service.get_latest_indicators(symbol, timeframe)
+        
+        if data and "indicators" in data and "atr" in data["indicators"]:
+            return {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "atr_data": data["indicators"]["atr"],
+                "current_price": data.get("current_price")
+            }
+        else:
+            return {"error": f"No ATR data found for {symbol} on {timeframe}"}
+            
+    except Exception as e:
+        await log_event("get_atr_error", {"error": str(e), "symbol": symbol})
+        return {"error": f"Failed to get ATR indicators: {str(e)}"}
+
+@app.get("/indicators/{symbol}/pivot-ribbon")
+async def get_pivot_ribbon(symbol: str, timeframe: str = "1d"):
+    """Get pivot ribbon data for a symbol and timeframe."""
+    try:
+        indicator_service = get_indicator_service()
+        data = await indicator_service.get_latest_indicators(symbol, timeframe)
+        
+        if data and "indicators" in data and "pivot_ribbon" in data["indicators"]:
+            return {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "pivot_data": data["indicators"]["pivot_ribbon"],
+                "current_price": data.get("current_price")
+            }
+        else:
+            return {"error": f"No pivot ribbon data found for {symbol} on {timeframe}"}
+            
+    except Exception as e:
+        await log_event("get_pivot_ribbon_error", {"error": str(e), "symbol": symbol})
+        return {"error": f"Failed to get pivot ribbon: {str(e)}"}
+
+@app.get("/indicators/{symbol}/support-resistance")
+async def get_support_resistance(symbol: str, timeframe: str = "1d"):
+    """Get support and resistance levels for a symbol and timeframe."""
+    try:
+        indicator_service = get_indicator_service()
+        data = await indicator_service.get_latest_indicators(symbol, timeframe)
+        
+        if data and "indicators" in data and "support_resistance" in data["indicators"]:
+            return {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "support_resistance": data["indicators"]["support_resistance"],
+                "current_price": data.get("current_price")
+            }
+        else:
+            return {"error": f"No support/resistance data found for {symbol} on {timeframe}"}
+            
+    except Exception as e:
+        await log_event("get_support_resistance_error", {"error": str(e), "symbol": symbol})
+        return {"error": f"Failed to get support/resistance: {str(e)}"}
+
+@app.post("/indicators/calculate")
+async def calculate_indicators(symbol: str = "SPY", background_tasks: BackgroundTasks = None):
+    """Calculate indicators for a symbol (can run in background)."""
+    try:
+        indicator_service = get_indicator_service()
+        
+        if background_tasks:
+            # Run in background
+            background_tasks.add_task(indicator_service.calculate_all_indicators, symbol)
+            return {"message": f"Started calculating indicators for {symbol} in background"}
+        else:
+            # Run immediately
+            results = await indicator_service.calculate_all_indicators(symbol)
+            return {"symbol": symbol, "results": results}
+            
+    except Exception as e:
+        await log_event("calculate_indicators_error", {"error": str(e), "symbol": symbol})
+        return {"error": f"Failed to calculate indicators: {str(e)}"}
+
+@app.get("/indicators/status")
+async def get_indicator_status():
+    """Get status of indicator calculations."""
+    try:
+        indicator_service = get_indicator_service()
+        cache_info = {
+            "cached_indicators": len(indicator_service.indicator_cache),
+            "cache_ttl_seconds": indicator_service.cache_ttl,
+            "supported_timeframes": indicator_service.timeframes + indicator_service.trading_timeframes,
+            "supported_symbols": indicator_service.symbols
+        }
+        return cache_info
+        
+    except Exception as e:
+        await log_event("indicator_status_error", {"error": str(e)})
+        return {"error": f"Failed to get indicator status: {str(e)}"} 

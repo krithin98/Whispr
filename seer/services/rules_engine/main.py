@@ -7,7 +7,11 @@ import asyncio
 # Import our existing modules
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
+backend_path = os.path.join(os.path.dirname(__file__), '..', '..', 'backend')
+sys.path.append(backend_path)
+
+# Change working directory to backend so relative paths work
+os.chdir(backend_path)
 
 from database import log_event, get_db
 from strategies import check_strategies, load_strategies, seed_test_strategies, safe_eval, create_strategy, get_strategy_by_id, update_strategy, delete_strategy, toggle_strategy

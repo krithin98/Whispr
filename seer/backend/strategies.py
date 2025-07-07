@@ -195,22 +195,27 @@ async def add_strategy(name: str, trigger_expr: str, prompt_tpl: str):
     )
 
 async def seed_test_strategies():
-    """Add some test strategies to get started."""
-    test_strategies = [
-        ("High price ping", "value >= 105", "Price crossed {{value}}. Any risk-reducing actions?"),
-        ("Low price alert", "value <= 95", "Price dropped to {{value}}. Consider buying opportunity?"),
-        ("Tick milestone", "tick % 10 == 0", "Reached tick {{tick}} with value {{value}}. Market pattern analysis?")
+    """Add real trading strategies to get started (test strategies removed)."""
+    # Real trading strategies
+    real_strategies = [
+        ("ATR Strategy", "True", "ATR-based strategy triggered. Check ATR levels and volatility conditions.", "atr_based"),
+        ("Vomy Strategy", "True", "Vomy strategy activated. Analyze volume and momentum indicators.", "vomy_ivomy"),
+        ("4H PO Dot Strategy", "True", "4-Hour Phase Oscillator Dot strategy triggered. Check trend direction.", "po_dot"),
+        ("Conviction Arrow Strategy", "True", "Conviction Arrow signal detected. Evaluate market conviction.", "conviction_arrow"),
+        ("Golden Gate Strategy", "True", "Golden Gate pattern identified. Check timing and completion probabilities.", "golden_gate")
     ]
     
     conn = await get_db()
-    for name, expr, tpl in test_strategies:
+    
+    # Seed real strategies
+    for name, expr, tpl, strategy_type in real_strategies:
         # Check if strategy already exists
         cursor = await conn.execute("SELECT id FROM strategies WHERE name = ?", (name,))
         existing = await cursor.fetchall()
         if not existing:
             await conn.execute(
-                "INSERT INTO strategies (name, strategy_expression, prompt_tpl) VALUES (?, ?, ?)",
-                (name, expr, tpl)
+                "INSERT INTO strategies (name, strategy_expression, prompt_tpl, strategy_type) VALUES (?, ?, ?, ?)",
+                (name, expr, tpl, strategy_type)
             )
 
 async def create_strategy(name: str, trigger_expr: str, prompt_tpl: str):

@@ -3,8 +3,8 @@ import json
 import os
 from pathlib import Path
 
-DB_PATH = Path(os.getenv("DB_PATH", "/app/data/seer.db"))
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # /app/data
+DB_PATH = Path(os.getenv("DB_PATH", "./data/seer.db"))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # ./data
 
 CREATE_EVENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS events (
