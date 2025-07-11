@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 app = FastAPI(
-    title="6-Week Seer Co-pilot API",
+    title="6-Week Whispr Co-pilot API",
     description="Real-Time Decision Copilot - Week 1 MVP",
     version="0.1.0"
 )
@@ -45,7 +45,7 @@ async def health_check():
     """Health check endpoint - Week 1 deliverable"""
     return JSONResponse({
         "status": "healthy",
-        "service": "6-Week Seer Co-pilot",
+        "service": "6-Week Whispr Co-pilot",
         "version": "0.1.0",
         "timestamp": datetime.utcnow().isoformat(),
         "active_connections": len(active_connections),

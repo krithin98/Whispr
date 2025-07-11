@@ -1,4 +1,4 @@
-# 6-Week Seer Co-pilot
+# 6-Week Whispr Co-pilot
 
 A real-time decision copilot that captures live context, applies user-defined rules, and surfaces AI-ranked suggestions in real-time.
 
@@ -143,7 +143,7 @@ docker compose down
 
 MIT (placeholder)
 
-# Seer – MVP Step 1, 2 & 3
+# Whispr – MVP Step 1, 2 & 3
 
 ## Quick start
 

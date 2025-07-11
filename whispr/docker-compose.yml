@@ -1,11 +1,12 @@
 version: "3.8"
 
 services:
-  backend:
+  # UI Service (WebSocket, tick generation, frontend)
+  ui:
     build: ./backend
     volumes:
       - ./backend:/app
-      - whispr_db:/app/data
+      - ./backend/data:/app/data
     ports:
       - "8000:8000"
     environment:
@@ -14,13 +15,19 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DB_PATH=${DB_PATH:-/app/data/whispr.db}
+      - USE_REAL_DATA=${USE_REAL_DATA:-false}
+      - TRADING_SYMBOL=${TRADING_SYMBOL:-SPY}
+      - LIVE_TRADING=${LIVE_TRADING:-false}
+    depends_on:
+      - rules-engine
 
+  # Rules Engine Service (Pure rule evaluation logic)
   rules-engine:
     build:
       context: .
       dockerfile: services/rules_engine/Dockerfile
     volumes:
-      - whispr_db:/app/data
+      - ./backend/data:/app/data
     ports:
       - "8001:8001"
     environment:
@@ -31,4 +38,4 @@ services:
       - DB_PATH=${DB_PATH:-/app/data/whispr.db}
 
 volumes:
-  whispr_db:
+  whispr_db: 

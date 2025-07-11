@@ -5,7 +5,7 @@ from database import log_event, get_db
 from llm import get_cost_comparison, call_llm
 from rules import check_rules, seed_test_rules
 
-app = FastAPI(title="Seer-MVP")
+app = FastAPI(title="Whispr-MVP")
 
 @app.on_event("startup")
 async def startup_event():
@@ -14,7 +14,7 @@ async def startup_event():
 
 @app.get("/")
 async def root():
-    return {"status": "OK", "message": "Seer backend running"}
+    return {"status": "OK", "message": "Whispr backend running"}
 
 @app.websocket("/ws/ticks")
 async def websocket_ticks(ws: WebSocket):

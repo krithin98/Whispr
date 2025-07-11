@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-DB_PATH = Path(os.getenv("DB_PATH", "/app/data/seer.db"))
+DB_PATH = Path(os.getenv("DB_PATH", "/app/data/whispr.db"))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # /app/data
 
 CREATE_SQL = """

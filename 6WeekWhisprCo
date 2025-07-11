@@ -1,0 +1,102 @@
+{
+  "project_name": "Real-Time Decision Copilot (6‑Week MVP)",
+  "owner": "Krithin Edalur",
+  "created": "2025-06-29",
+  "description": "A single‑user desktop assistant that captures live context, applies user‑defined rules, and surfaces AI‑ranked suggestions in real time. The goal of this MVP is to prove the core loop (data → rule → AI prompt → suggestion) in six weeks.",
+  "why": {
+    "problem": "Generic AI chat does not remember an individual's workflow or provide timely, context‑aware guidance.",
+    "solution": "Build a modular co‑pilot that learns the user's rules & patterns, processes live context, and delivers actionable prompts.",
+    "success_metric": "≥50% of AI suggestions are accepted/acted‑upon by the user during daily sessions."
+  },
+  "timeline_weeks": [
+    {
+      "week": 1,
+      "label": "Data Engine & WebSocket",
+      "deliverables": [
+        "FastAPI server running in Docker",
+        "WebSocket endpoint /ws/ticks streaming simulated tick JSON once per second",
+        "Health‑check GET / returns status"
+      ],
+      "why": "Establish the live data 'bloodstream' every other feature depends on."
+    },
+    {
+      "week": 2,
+      "label": "SQLite Journaling",
+      "deliverables": [
+        "events table (id, ts, type, payload)",
+        "Persist all ticks & system events",
+        "Write‑ahead logging (WAL) enabled to reduce lock contention",
+        "ENV flag DATABASE_URL to enable Postgres swap later"
+      ],
+      "why": "Give the system durable memory for replay, debugging, and future fine‑tuning."
+    },
+    {
+      "week": 3,
+      "label": "Rule Memory & First AI Call",
+      "deliverables": [
+        "rules table (id, name, trigger_expr, prompt_template)",
+        "Simple RAG prompt sent to OpenAI GPT‑4o",
+        "AI suggestion pushed over WebSocket"
+      ],
+      "why": "Connect live data + user rules + AI → actionable insight (the core value loop)."
+    },
+    {
+      "week": 4,
+      "label": "Autonomy Slider & Prompt Templates",
+      "deliverables": [
+        "Frontend slider (0‑10) with persistence",
+        "prompt_levels.yaml mapping slider value → prompt tone/format",
+        "Debounce/throttle logic: max 1 AI call /5 s unless user forces refresh"
+      ],
+      "why": "Allow the user to control AI assertiveness and cut infra cost."
+    },
+    {
+      "week": 5,
+      "label": "UI Overlay (Tauri HUD)",
+      "deliverables": [
+        "Transparent desktop overlay displaying live suggestions",
+        "Hot‑key toggle, DPI‑safe on 4K/Retina",
+        "Latency telemetry (tick→render in ms)"
+      ],
+      "why": "Surface suggestions without context‑switching; makes the tool feel real."
+    },
+    {
+      "week": 6,
+      "label": "Session Replay & Polish",
+      "deliverables": [
+        "CLI `replay_session --id` renders past ticks + suggestions",
+        "Safe‑mode toggle (no AI calls, demo data only)",
+        "Tenacity retry wrapper around all OpenAI calls",
+        "README + Docker Compose quick‑start"
+      ],
+      "why": "Enable reflection, debugging, and demo‑safe sharing; final hardening."
+    }
+  ],
+  "architecture": {
+    "backend": "FastAPI + Starlette WebSockets",
+    "db": "SQLite (WAL) → Postgres ready",
+    "ai_worker": "OpenAI GPT‑4o via LangChain; Tenacity retry",
+    "vector_store": "Qdrant docker container (future)",
+    "overlay": "Tauri (Rust + Svelte)",
+    "devops": "Docker Compose; ENV secrets for keys"
+  },
+  "stack_versions": {
+    "python": "3.11",
+    "fastapi": ">=0.111",
+    "uvicorn": ">=0.30",
+    "tauri": "v2 beta",
+    "openai_api": "gpt‑4o‑mini for dev, gpt‑4o for prod"
+  },
+  "getting_started": [
+    "git clone",
+    "cp .env.example .env  # add OPENAI_API_KEY",
+    "docker compose up --build",
+    "Open http://localhost:8000/docs to verify"
+  ],
+  "open_questions_for_dad": [
+    "Qdrant vs. PGVector on single GPU box?",
+    "Tick→prompt budget: batch embeds or stream per tick?"
+  ],
+  "license": "MIT (placeholder)",
+  "version": "0.1.0"
+}
