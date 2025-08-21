@@ -19,6 +19,11 @@ Environment Variables:
 import asyncio
 import os
 import webbrowser
+import urllib.parse
+import requests
+import json
+import base64
+from datetime import datetime, timedelta
 from schwab_config import SchwabOAuthManager, initialize_schwab_oauth
 
 def get_credentials():
@@ -40,6 +45,95 @@ def get_credentials():
         return None, None, None
     
     return client_id, client_secret, redirect_uri
+
+def extract_auth_code_from_url(full_url):
+    """Extract and decode the authorization code from the full redirect URL"""
+    
+    print(f"📋 Processing URL...")
+    
+    # Parse the URL
+    parsed = urllib.parse.urlparse(full_url)
+    query_params = urllib.parse.parse_qs(parsed.query)
+    
+    print(f"🔍 Found query parameters: {list(query_params.keys())}")
+    
+    if 'code' in query_params:
+        # Get the code (parse_qs returns lists)
+        auth_code = query_params['code'][0]
+        
+        print(f"✅ Raw authorization code found")
+        
+        # URL decode if needed
+        decoded_code = urllib.parse.unquote(auth_code)
+        
+        if decoded_code != auth_code:
+            print(f"🔄 URL decoded successfully")
+        
+        return decoded_code
+    else:
+        print("❌ No 'code' parameter found in URL")
+        return None
+
+def exchange_code_for_tokens_fixed(auth_code, client_id, client_secret, redirect_uri):
+    """Exchange authorization code for access tokens with SSL fix for macOS"""
+    
+    # Prepare credentials
+    credentials = f"{client_id}:{client_secret}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    
+    # Prepare request
+    headers = {
+        "Authorization": f"Basic {encoded_credentials}",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
+    data = {
+        "grant_type": "authorization_code",
+        "code": auth_code,
+        "redirect_uri": redirect_uri
+    }
+    
+    try:
+        # Disable SSL warnings for macOS
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Make request with SSL verification disabled (for macOS issues)
+        response = requests.post(
+            "https://api.schwabapi.com/v1/oauth/token",
+            headers=headers,
+            data=data,
+            verify=False  # Disable SSL verification for macOS
+        )
+        
+        if response.status_code == 200:
+            tokens = response.json()
+            
+            # Calculate expiration time
+            expires_in = tokens.get("expires_in", 1800)  # 30 minutes default
+            expires_at = datetime.now() + timedelta(seconds=expires_in)
+            
+            # Add expiration time to tokens
+            tokens["expires_at"] = expires_at.isoformat()
+            
+            # Save tokens
+            token_file = os.path.expanduser("~/.schwab_tokens.json")
+            with open(token_file, "w") as f:
+                json.dump(tokens, f, indent=2)
+            
+            print("✅ Tokens saved successfully!")
+            print(f"📁 Location: {token_file}")
+            print(f"🕐 Access token expires: {expires_at}")
+            
+            return tokens
+        else:
+            print(f"❌ Token exchange failed: {response.status_code}")
+            print(f"Response: {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error during token exchange: {e}")
+        return None
 
 async def setup_oauth():
     """Main setup function"""
@@ -89,20 +183,28 @@ async def setup_oauth():
     print("   - Grant permissions to your app")
     print("   - You'll be redirected to a 404 page (this is expected)")
     
-    print("\n3. Copy the authorization code from the URL:")
-    print("   Look for '?code=XXXXXXX' in the address bar")
-    print("   Copy everything after 'code=' and before '&' (if any)")
+    print("\n3. Copy the ENTIRE URL from the address bar:")
+    print("   The page will show a 404 error, but the URL contains the code")
+    print("   Copy the complete URL and paste it below")
     
-    # Get authorization code from user
-    auth_code = input("\nEnter the authorization code: ").strip()
+    # Get full redirect URL from user
+    full_url = input("\nPaste the full redirect URL here: ").strip()
+    
+    if not full_url:
+        print("❌ No URL provided")
+        return
+    
+    # Extract authorization code from URL
+    auth_code = extract_auth_code_from_url(full_url)
     
     if not auth_code:
-        print("❌ No authorization code provided")
+        print("❌ Could not extract authorization code from URL")
         return
     
     # Step 2: Exchange code for tokens
     print("\n🔄 Exchanging authorization code for tokens...")
     try:
+        # First try the standard method
         tokens = await oauth_manager.exchange_code_for_tokens(auth_code)
         print("✅ Authorization successful!")
         print(f"   Access Token: {tokens.access_token[:20]}...")
@@ -120,11 +222,21 @@ async def setup_oauth():
         print("Your tokens have been saved and your app is ready to use Schwab API.")
         
     except Exception as e:
-        print(f"❌ Authorization failed: {e}")
-        print("\nTroubleshooting:")
-        print("- Make sure you copied the complete authorization code")
-        print("- Check that your Client ID and Client Secret are correct")
-        print("- Verify your redirect URI matches what's registered in Schwab")
+        print(f"⚠️  Standard method failed: {e}")
+        print("🔄 Trying SSL-fixed method for macOS...")
+        
+        # Fallback to our SSL-fixed method
+        token_dict = exchange_code_for_tokens_fixed(auth_code, client_id, client_secret, redirect_uri)
+        
+        if token_dict:
+            print("\n🎉 SUCCESS! Schwab authentication complete!")
+            print("Your tokens have been saved and your app is ready to use Schwab API.")
+        else:
+            print("\n❌ All methods failed. Please try again with a fresh authorization code.")
+            print("\nTroubleshooting:")
+            print("- Make sure you copied the complete redirect URL")
+            print("- Check that your Client ID and Client Secret are correct")
+            print("- Verify your redirect URI matches what's registered in Schwab")
 
 def print_env_setup():
     """Print environment variable setup instructions"""

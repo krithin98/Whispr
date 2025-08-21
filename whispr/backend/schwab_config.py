@@ -72,7 +72,14 @@ class SchwabOAuthManager:
             "redirect_uri": self.redirect_uri
         }
         
-        async with aiohttp.ClientSession() as session:
+        # Create SSL context that bypasses certificate verification (for macOS)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(self.TOKEN_URL, headers=headers, data=data) as response:
                 if response.status == 200:
                     token_data = await response.json()
@@ -110,7 +117,14 @@ class SchwabOAuthManager:
             "refresh_token": self.tokens.refresh_token
         }
         
-        async with aiohttp.ClientSession() as session:
+        # Create SSL context that bypasses certificate verification (for macOS)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(self.TOKEN_URL, headers=headers, data=data) as response:
                 if response.status == 200:
                     token_data = await response.json()

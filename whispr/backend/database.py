@@ -149,6 +149,10 @@ async def get_db():
         await get_db.conn.execute(CREATE_INDICATOR_DATA_TABLE)
         await get_db.conn.execute(CREATE_STRATEGY_STATES_TABLE)
         await get_db.conn.execute(CREATE_STRATEGY_TRIGGERS_TABLE)
+        
+        # Create level tracking tables
+        await create_level_tracking_tables(get_db.conn)
+        
     return get_db.conn
 
 async def log_event(event_type: str, payload: dict):
@@ -263,4 +267,203 @@ async def update_trigger_outcome(
         UPDATE strategy_triggers 
         SET outcome = ?, outcome_price = ?, outcome_time = ?
         WHERE id = ?
-    """, (outcome, outcome_price, outcome_time or "datetime('now')", trigger_id)) 
+    """, (outcome, outcome_price, outcome_time or "datetime('now')", trigger_id))
+
+
+# ===============================================
+# LEVEL TRACKING DATABASE FUNCTIONS
+# ===============================================
+
+async def create_level_tracking_tables(conn):
+    """Create all level tracking tables."""
+    
+    # Read and execute schema
+    import os
+    schema_path = os.path.join(os.path.dirname(__file__), "level_tracking_schema_fixed.sql")
+    
+    with open(schema_path, 'r') as f:
+        schema_sql = f.read()
+    
+    # Split by semicolon and execute each statement
+    statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
+    
+    for statement in statements:
+        # Check if statement contains CREATE (might have comments before it)
+        if 'CREATE TABLE' in statement.upper() or 'CREATE VIEW' in statement.upper():
+            try:
+                await conn.execute(statement)
+                print(f"✅ Executed: {statement.split()[2] if len(statement.split()) > 2 else 'Unknown'}")
+            except Exception as e:
+                print(f"❌ Failed to execute statement: {e}")
+                print(f"Statement: {statement[:100]}...")
+
+
+async def log_spx_tick(price: float, high: float, low: float, volume: int = 0, timestamp: str = None):
+    """Log an SPX price tick."""
+    conn = await get_db()
+    
+    if timestamp is None:
+        from datetime import datetime
+        timestamp = datetime.now().isoformat()
+    
+    session_date = timestamp[:10]  # YYYY-MM-DD
+    
+    await conn.execute("""
+        INSERT OR IGNORE INTO spx_price_ticks 
+        (timestamp, price, high, low, volume, session_date)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (timestamp, price, high, low, volume, session_date))
+
+
+async def store_atr_levels(timeframe: str, session_date: str, levels_data: dict):
+    """Store calculated ATR levels for a timeframe."""
+    conn = await get_db()
+    from datetime import datetime
+    
+    await conn.execute("""
+        INSERT OR REPLACE INTO atr_levels (
+            timeframe, session_date, calculation_time, previous_close, atr_value,
+            lower_trigger, upper_trigger, lower_0382, upper_0382, lower_0500, upper_0500,
+            lower_0618, upper_0618, lower_0786, upper_0786, lower_1000, upper_1000,
+            lower_1236, upper_1236, lower_1618, upper_1618, lower_2000, upper_2000
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        timeframe, session_date, datetime.now().isoformat(),
+        levels_data['previous_close'], levels_data['atr_value'],
+        levels_data['lower_trigger'], levels_data['upper_trigger'],
+        levels_data['lower_0382'], levels_data['upper_0382'],
+        levels_data['lower_0500'], levels_data['upper_0500'],
+        levels_data['lower_0618'], levels_data['upper_0618'],
+        levels_data['lower_0786'], levels_data['upper_0786'],
+        levels_data['lower_1000'], levels_data['upper_1000'],
+        levels_data['lower_1236'], levels_data['upper_1236'],
+        levels_data['lower_1618'], levels_data['upper_1618'],
+        levels_data['lower_2000'], levels_data['upper_2000']
+    ))
+
+
+async def log_level_hit(
+    timeframe: str, level_name: str, level_value: float, hit_price: float,
+    direction: str, fib_ratio: float, previous_close: float, atr_value: float,
+    hit_time: str = None, session_date: str = None
+) -> int:
+    """Log a level hit and return the hit ID."""
+    conn = await get_db()
+    from datetime import datetime
+    
+    if hit_time is None:
+        hit_time = datetime.now().isoformat()
+    if session_date is None:
+        session_date = hit_time[:10]
+    
+    cursor = await conn.execute("""
+        INSERT INTO level_hits (
+            hit_time, timeframe, level_name, level_value, hit_price,
+            direction, fib_ratio, previous_close, atr_value, session_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (hit_time, timeframe, level_name, level_value, hit_price,
+          direction, fib_ratio, previous_close, atr_value, session_date))
+    
+    return cursor.lastrowid
+
+
+async def start_golden_gate_sequence(
+    timeframe: str, direction: str, start_level_hit_id: int,
+    start_time: str, start_price: float, session_date: str = None
+) -> int:
+    """Start tracking a Golden Gate sequence (.382 hit)."""
+    conn = await get_db()
+    
+    if session_date is None:
+        session_date = start_time[:10]
+    
+    cursor = await conn.execute("""
+        INSERT INTO golden_gate_sequences (
+            timeframe, direction, session_date, start_level_hit_id,
+            start_time, start_price, completed
+        ) VALUES (?, ?, ?, ?, ?, ?, FALSE)
+    """, (timeframe, direction, session_date, start_level_hit_id, start_time, start_price))
+    
+    return cursor.lastrowid
+
+
+async def complete_golden_gate_sequence(
+    sequence_id: int, complete_level_hit_id: int,
+    complete_time: str, complete_price: float
+):
+    """Complete a Golden Gate sequence (.618 hit)."""
+    conn = await get_db()
+    from datetime import datetime
+    
+    # Get start data
+    start_result = await conn.execute("""
+        SELECT start_time, start_price FROM golden_gate_sequences WHERE id = ?
+    """, (sequence_id,))
+    start_row = await start_result.fetchone()
+    
+    if start_row:
+        start_time = datetime.fromisoformat(start_row[0])
+        complete_time_dt = datetime.fromisoformat(complete_time)
+        duration_seconds = int((complete_time_dt - start_time).total_seconds())
+        price_movement = abs(complete_price - start_row[1])
+        
+        await conn.execute("""
+            UPDATE golden_gate_sequences 
+            SET complete_level_hit_id = ?, complete_time = ?, complete_price = ?,
+                completed = TRUE, duration_seconds = ?, price_movement = ?
+            WHERE id = ?
+        """, (complete_level_hit_id, complete_time, complete_price,
+              duration_seconds, price_movement, sequence_id))
+
+
+async def get_recent_level_hits(hours: int = 24) -> list:
+    """Get recent level hits."""
+    conn = await get_db()
+    
+    cursor = await conn.execute("""
+        SELECT * FROM recent_level_hits
+        WHERE datetime(hit_time) > datetime('now', '-{} hours')
+        ORDER BY hit_time DESC
+    """.format(hours))
+    
+    return await cursor.fetchall()
+
+
+async def get_level_transition_stats(timeframe: str, from_level: str, to_level: str, direction: str) -> dict:
+    """Get transition statistics between levels."""
+    conn = await get_db()
+    
+    cursor = await conn.execute("""
+        SELECT * FROM level_transition_stats
+        WHERE timeframe = ? AND from_level = ? AND to_level = ? AND direction = ?
+    """, (timeframe, from_level, to_level, direction))
+    
+    row = await cursor.fetchone()
+    if row:
+        return {
+            'total_occurrences': row[5],
+            'successful_hits': row[6], 
+            'success_rate': row[7],
+            'avg_time_seconds': row[8],
+            'min_time_seconds': row[9],
+            'max_time_seconds': row[10]
+        }
+    return None
+
+
+async def update_daily_session_summary(session_date: str, **kwargs):
+    """Update daily session summary stats."""
+    conn = await get_db()
+    from datetime import datetime
+    
+    # Build dynamic update
+    if kwargs:
+        set_clauses = [f"{key} = ?" for key in kwargs.keys()]
+        set_clauses.append("last_updated = ?")
+        values = list(kwargs.values()) + [datetime.now().isoformat(), session_date]
+        
+        await conn.execute(f"""
+            INSERT OR REPLACE INTO daily_session_summary 
+            (session_date, {', '.join(kwargs.keys())}, last_updated)
+            VALUES (?, {', '.join(['?' for _ in kwargs])}, ?)
+        """, [session_date] + list(kwargs.values()) + [datetime.now().isoformat()]) 
