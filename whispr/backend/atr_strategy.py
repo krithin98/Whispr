@@ -5,14 +5,21 @@ from typing import Dict, Any, List
 from database import get_db, log_event
 
 class ATRStrategyGenerator:
-    """Generates and manages ATR-based rules (adjacent and multi-level)."""
-    
-    def __init__(self):
-        self.specification = self._load_specification()
-        self.atr_levels = self._load_atr_levels()
+    """Generates and manages ATR-based strategies (adjacent and multi-level)."""
+
+    def __init__(self, specification: Dict[str, Any] | None = None,
+                 atr_levels: Dict[str, Any] | None = None):
+        """Initialize generator with optional injected configuration.
+
+        When specification or ATR levels aren't provided, the generator
+        loads them from disk. This flexibility makes unit testing easier
+        by allowing tests to supply minimal in-memory configurations.
+        """
+        self.specification = specification or self._load_specification()
+        self.atr_levels = atr_levels or self._load_atr_levels()
     
     def _load_specification(self) -> Dict[str, Any]:
-        """Load the ATR rule specification."""
+        """Load the ATR strategy specification."""
         try:
             with open("data/atr_rule_specification.json", "r") as f:
                 return json.load(f)
@@ -46,7 +53,7 @@ class ATRStrategyGenerator:
                     raise FileNotFoundError("atr_levels.json not found in any expected location")
     
     async def generate_atr_strategies(self):
-        """Generate all ATR rules for all timeframes."""
+        """Generate all ATR strategys for all timeframes."""
         conn = await get_db()
         
         # First, register the ATR levels indicator if not exists
@@ -93,7 +100,7 @@ class ATRStrategyGenerator:
         )
     
     async def _generate_adjacent_rules(self, timeframe: str) -> int:
-        """Generate adjacent (one-step) ATR rules for a timeframe."""
+        """Generate adjacent (one-step) ATR strategys for a timeframe."""
         conn = await get_db()
         strategies_created = 0
         
@@ -133,7 +140,7 @@ class ATRStrategyGenerator:
         return strategies_created
     
     async def _generate_multi_level_rules(self, timeframe: str) -> int:
-        """Generate multi-level (skip-a-step) ATR rules for a timeframe."""
+        """Generate multi-level (skip-a-step) ATR strategys for a timeframe."""
         conn = await get_db()
         strategies_created = 0
         
@@ -172,19 +179,29 @@ class ATRStrategyGenerator:
         
         return strategies_created
     
-    async def _create_atr_strategy(self, name: str, expression: str, description: str, 
-                              tags: str, probability: float, priority: int,
-                              rule_type: str, timeframe: str, tag: str, side: str, level: float):
-        """Create a single ATR rule."""
+    async def _create_atr_strategy(
+        self,
+        name: str,
+        expression: str,
+        description: str,
+        tags: str,
+        probability: float,
+        priority: int,
+        rule_type: str,
+        timeframe: str,
+        tag: str,
+        side: str,
+        level: float,
+    ) -> None:
+        """Create a single ATR strategy."""
         conn = await get_db()
-        
-        # Check if rule already exists
+
+        # Check if strategy already exists
         cursor = await conn.execute("SELECT id FROM strategies WHERE name = ?", (name,))
         existing = await cursor.fetchone()
         if existing:
-            return  # Rule already exists
-        
-        # Create the rule
+            return  # Strategy already exists
+
         prompt_template = f"ATR {tag} {side.title()} rule triggered: {description}"
         indicator_params = json.dumps({
             "indicator": "atr_levels",
@@ -193,34 +210,34 @@ class ATRStrategyGenerator:
             "tag": tag,
             "side": side,
             "level": level,
-            "probability": probability
+            "probability": probability,
         })
-        
+
         await conn.execute(
             """
-            INSERT INTO strategies (name, rule_expression, prompt_tpl, tags, priority, rule_type, indicator_ref, indicator_params)
+            INSERT INTO strategies (name, strategy_expression, prompt_tpl, tags, priority, strategy_type, indicator_ref, indicator_params)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, expression, prompt_template, tags, priority, "atr_based", "atr_levels", indicator_params)
+            (name, expression, prompt_template, tags, priority, "atr_based", "atr_levels", indicator_params),
         )
     
     async def evaluate_atr_strategy(self, strategy_id: int, current_price: float, symbol: str) -> Dict[str, Any]:
-        """Evaluate an ATR rule against current market data."""
+        """Evaluate an ATR strategy against current market data."""
         conn = await get_db()
         
-        # Get rule details
+        # Get strategy details
         cursor = await conn.execute(
-            "SELECT rule_expression, indicator_params FROM strategies WHERE id = ?",
+            "SELECT strategy_expression, indicator_params FROM strategies WHERE id = ?",
             (strategy_id,)
         )
         rule = await cursor.fetchone()
         if not rule:
             return {"triggered": False, "error": "Rule not found"}
         
-        rule_expression, indicator_params_json = rule
+        strategy_expression, indicator_params_json = rule
         indicator_params = json.loads(indicator_params_json)
         
-        # Evaluate the rule
+        # Evaluate the strategy
         try:
             # Simple evaluation - in production you'd use the safe_eval function
             # For now, we'll do a basic check
@@ -233,10 +250,10 @@ class ATRStrategyGenerator:
                 triggered = current_price <= level
             
             if triggered:
-                # Log the ATR rule trigger
+                # Log the ATR strategy trigger
                 await log_event("atr_strategy_trigger", {
                     "strategy_id": strategy_id,
-                    "rule_expression": rule_expression,
+                    "strategy_expression": strategy_expression,
                     "timeframe": indicator_params.get("timeframe"),
                     "rule_type": indicator_params.get("rule_type"),
                     "tag": indicator_params.get("tag"),
@@ -249,7 +266,7 @@ class ATRStrategyGenerator:
             
             return {
                 "triggered": triggered,
-                "rule_expression": rule_expression,
+                "strategy_expression": strategy_expression,
                 "timeframe": indicator_params.get("timeframe"),
                 "rule_type": indicator_params.get("rule_type"),
                 "tag": indicator_params.get("tag"),
@@ -260,8 +277,11 @@ class ATRStrategyGenerator:
             }
             
         except Exception as e:
-            await log_event("error", {"message": f"ATR rule evaluation failed: {str(e)}"})
+            await log_event("error", {"message": f"ATR strategy evaluation failed: {str(e)}"})
             return {"triggered": False, "error": f"Evaluation failed: {str(e)}"}
 
-# Global instance
-atr_strategy_generator = ATRStrategyGenerator() 
+# Global instance (may be None if config files are missing)
+try:
+    atr_strategy_generator = ATRStrategyGenerator()
+except FileNotFoundError:
+    atr_strategy_generator = None

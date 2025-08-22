@@ -36,3 +36,10 @@ async def log_event(event_type: str, payload: dict):
         "INSERT INTO events (ts, event_type, payload) VALUES (datetime('now'), ?, ?)",
         (event_type, json.dumps(payload)),
     )
+
+
+async def log_strategy_trigger(*args, **kwargs):
+    """Placeholder for strategy trigger logging used in tests."""
+    # The full implementation lives in the production service. For unit tests we
+    # simply ignore calls so strategies can import this function without error.
+    return None
