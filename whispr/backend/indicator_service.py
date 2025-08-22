@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional
 import pandas as pd
 from data_providers import get_provider
 from database import log_event, get_db
+from indicators.technical.atr import ATRIndicator
 
 
 class IndicatorService:
@@ -83,7 +84,7 @@ class IndicatorService:
             results["indicators"]["atr"] = {
                 "atr_14": atr_14,
                 "atr_21": atr_21,
-                "atr_levels": self.calculate_atr_levels(current_price, atr_14)
+                "atr_levels": ATRIndicator.calculate(current_price, atr_14)
             }
             
             # Calculate EMAs
@@ -133,26 +134,6 @@ class IndicatorService:
                 "timeframe": timeframe,
                 "error": str(e)
             }
-    
-    def calculate_atr_levels(self, price: float, atr: float) -> Dict[str, float]:
-        """Calculate ATR-based support and resistance levels."""
-        if atr == 0:
-            return {}
-        
-        levels = {
-            "level_0_382": price + (atr * 0.382),
-            "level_0_618": price + (atr * 0.618),
-            "level_1_000": price + atr,
-            "level_1_618": price + (atr * 1.618),
-            "level_2_618": price + (atr * 2.618),
-            "level_neg_0_382": price - (atr * 0.382),
-            "level_neg_0_618": price - (atr * 0.618),
-            "level_neg_1_000": price - atr,
-            "level_neg_1_618": price - (atr * 1.618),
-            "level_neg_2_618": price - (atr * 2.618)
-        }
-        
-        return {k: round(v, 4) for k, v in levels.items()}
     
     def analyze_ema_trend(self, ema_9: float, ema_21: float, ema_50: float, ema_200: float) -> str:
         """Analyze EMA trend alignment."""
@@ -332,4 +313,4 @@ def get_indicator_service() -> IndicatorService:
     global _indicator_service
     if _indicator_service is None:
         _indicator_service = IndicatorService()
-    return _indicator_service 
+    return _indicator_service
