@@ -6,7 +6,7 @@ Test script for ATR strategy generation and evaluation.
 import asyncio
 import json
 from database import get_db, log_event
-from atr_strategy import atr_strategy_generator
+from strategy_engine import strategy_engine
 
 async def test_atr_strategy_system():
     """Test the complete ATR strategy system."""
@@ -15,7 +15,7 @@ async def test_atr_strategy_system():
     
     # 1. Generate ATR strategies
     print("\n1. Generating ATR strategies...")
-    total_strategies = await atr_strategy_generator.generate_atr_strategies()
+    total_strategies = await strategy_engine.generate_atr_strategies()
     print(f"✅ Generated {total_strategies} ATR strategies")
     
     # 2. List generated strategies by category
@@ -59,7 +59,7 @@ async def test_atr_strategy_system():
     test_strategies = await cursor.fetchall()
     
     for strategy_id, strategy_name, expression in test_strategies:
-        result = await atr_strategy_generator.evaluate_atr_strategy(strategy_id, price, symbol)
+        result = await strategy_engine.evaluate_atr_strategy(strategy_id, price, symbol)
         
         if result.get("triggered", False):
             strategy_type = result.get("strategy_type", "unknown")
@@ -105,7 +105,7 @@ async def test_atr_configuration():
     print("\n🔧 Testing ATR Configuration")
     
     # Load and display configuration
-    spec = atr_strategy_generator.get_atr_specification()
+    spec = strategy_engine.get_atr_specification()
     
     print(f"✅ Loaded {len(spec['adjacent_strategies'])} adjacent strategy types")
     print(f"✅ Loaded {len(spec['multi_level_strategies'])} multi-level strategy types")

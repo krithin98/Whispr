@@ -262,6 +262,3 @@ class ATRStrategyGenerator:
         except Exception as e:
             await log_event("error", {"message": f"ATR rule evaluation failed: {str(e)}"})
             return {"triggered": False, "error": f"Evaluation failed: {str(e)}"}
-
-# Global instance
-atr_strategy_generator = ATRStrategyGenerator() 

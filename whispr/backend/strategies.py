@@ -3,7 +3,7 @@ import ast
 import operator as op
 from database import get_db, log_event, log_strategy_trigger
 from indicators import indicator_manager, gg_rule_generator
-from atr_strategy import atr_strategy_generator
+from strategy_engine import strategy_engine
 from vomy_strategy import VomyStrategyGenerator, VomyStrategyEvaluator
 from four_h_po_dot_strategy import po_dot_strategy_generator
 from conviction_arrow_strategy import conviction_arrow_strategy
@@ -85,8 +85,8 @@ async def check_strategies(tick):
                     "evaluation_result": result
                 }
         elif strategy_type == "atr_based":
-            # Handle ATR-based strategies
-            result = await atr_strategy_generator.evaluate_atr_strategy(
+            # Handle ATR-based strategies through the strategy engine
+            result = await strategy_engine.evaluate_atr_strategy(
                 strategy["id"],
                 tick.get("price", tick.get("value", 0)),
                 tick.get("symbol", "SPY")
