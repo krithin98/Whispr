@@ -108,7 +108,7 @@ scp -r -i ~/path/to/key whispr/ ubuntu@YOUR_PUBLIC_IP:/opt/spx-atr/
 
 ### Install Python Dependencies:
 ```bash
-cd /opt/spx-atr/whispr/backend
+cd /opt/spx-atr/backend
 source /opt/spx-atr/venv/bin/activate
 pip install -r requirements.txt
 
@@ -120,7 +120,7 @@ pip install aiohttp aiosqlite pandas requests
 
 ### Create Environment File:
 ```bash
-cd /opt/spx-atr/whispr/backend
+cd /opt/spx-atr/backend
 nano .env
 ```
 
@@ -154,7 +154,7 @@ scp -i ~/path/to/key ~/.schwab_tokens.json ubuntu@YOUR_PUBLIC_IP:/home/ubuntu/
 
 ### Create Production Runner Script:
 ```bash
-cd /opt/spx-atr/whispr/backend
+cd /opt/spx-atr/backend
 nano start_production.py
 ```
 
@@ -254,7 +254,7 @@ chmod +x start_production.py
 
 ### Create PM2 Configuration:
 ```bash
-cd /opt/spx-atr/whispr/backend
+cd /opt/spx-atr/backend
 nano ecosystem.config.js
 ```
 
@@ -264,14 +264,14 @@ module.exports = {
   apps: [{
     name: 'spx-atr-tracker',
     script: '/opt/spx-atr/venv/bin/python',
-    args: '/opt/spx-atr/whispr/backend/start_production.py',
-    cwd: '/opt/spx-atr/whispr/backend',
+    args: '/opt/spx-atr/backend/start_production.py',
+    cwd: '/opt/spx-atr/backend',
     instances: 1,
     autorestart: true,
     watch: false,
     max_memory_restart: '1G',
     env: {
-      PYTHONPATH: '/opt/spx-atr/whispr/backend',
+      PYTHONPATH: '/opt/spx-atr/backend',
       NODE_ENV: 'production'
     },
     log_file: '/opt/spx-atr/logs/pm2.log',
@@ -303,7 +303,7 @@ pm2 logs spx-atr-tracker
 
 ### Test Connection:
 ```bash
-cd /opt/spx-atr/whispr/backend
+cd /opt/spx-atr/backend
 source /opt/spx-atr/venv/bin/activate
 python -c "
 import asyncio

@@ -129,13 +129,13 @@
 ## 📁 **Key Files & Endpoints**
 
 ### **Backend Services**
-- `whispr/backend/main.py` - Main FastAPI service (port 8000)
+- `backend/main.py` - Main FastAPI service (port 8000)
 - `whispr/services/rules_engine/main.py` - Strategy evaluation service (port 8001)
 
 ### **Core Logic**
-- `whispr/backend/strategies.py` - Strategy evaluation logic
-- `whispr/backend/indicator_service.py` - Live indicator calculations
-- `whispr/backend/data_providers.py` - Data source abstraction
+- `backend/strategies.py` - Strategy evaluation logic
+- `backend/indicator_service.py` - Live indicator calculations
+- `backend/data_providers.py` - Data source abstraction
 
 ### **UI Components**
 - `whispr/ui/src/app/page.tsx` - Main dashboard

@@ -8,7 +8,7 @@ import sys
 import os
 
 # Add the backend directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 from backend.database import get_db
 

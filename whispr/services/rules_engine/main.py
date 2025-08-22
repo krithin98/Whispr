@@ -7,7 +7,7 @@ import asyncio
 # Import our existing modules
 import sys
 import os
-backend_path = os.path.join(os.path.dirname(__file__), '..', '..', 'backend')
+backend_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'backend')
 sys.path.append(backend_path)
 
 # Change working directory to backend so relative paths work

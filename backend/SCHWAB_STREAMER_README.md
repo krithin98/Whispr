@@ -180,7 +180,7 @@ asyncio.run(main())
 Run the test script to verify your setup:
 
 ```bash
-cd whispr/backend
+cd backend
 python test_schwab_streamer.py
 ```
 

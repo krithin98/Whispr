@@ -44,7 +44,7 @@ SCHWAB_REDIRECT_URI=https://127.0.0.1
 ### Option A: Command Line Setup (Recommended)
 
 ```bash
-cd whispr/backend
+cd backend
 python setup_schwab_oauth.py
 ```
 
@@ -118,7 +118,7 @@ python setup_schwab_oauth.py
 
 ```
 ~/.schwab_tokens.json       # Stored tokens (automatically managed)
-whispr/backend/
+backend/
 ├── schwab_config.py        # OAuth implementation
 ├── setup_schwab_oauth.py   # Setup script
 └── main.py                 # API with OAuth endpoints
