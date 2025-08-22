@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 
 # Add backend path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
 
 try:
     from production_atr_calculator import ProductionATRCalculator

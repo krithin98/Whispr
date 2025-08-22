@@ -17,16 +17,14 @@ class ATRStrategyGenerator:
             with open("data/atr_rule_specification.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            # Try alternative paths for different service contexts
+            # Try alternative path when running from project root
             try:
                 with open("backend/data/atr_rule_specification.json", "r") as f:
                     return json.load(f)
             except FileNotFoundError:
-                try:
-                    with open("whispr/backend/data/atr_rule_specification.json", "r") as f:
-                        return json.load(f)
-                except FileNotFoundError:
-                    raise FileNotFoundError("atr_rule_specification.json not found in any expected location")
+                raise FileNotFoundError(
+                    "atr_rule_specification.json not found in any expected location"
+                )
     
     def _load_atr_levels(self) -> Dict[str, Any]:
         """Load ATR levels configuration."""
@@ -34,16 +32,14 @@ class ATRStrategyGenerator:
             with open("data/atr_levels.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            # Try alternative paths for different service contexts
+            # Try alternative path when running from project root
             try:
                 with open("backend/data/atr_levels.json", "r") as f:
                     return json.load(f)
             except FileNotFoundError:
-                try:
-                    with open("whispr/backend/data/atr_levels.json", "r") as f:
-                        return json.load(f)
-                except FileNotFoundError:
-                    raise FileNotFoundError("atr_levels.json not found in any expected location")
+                raise FileNotFoundError(
+                    "atr_levels.json not found in any expected location"
+                )
     
     async def generate_atr_strategies(self):
         """Generate all ATR rules for all timeframes."""

@@ -3,10 +3,10 @@ version: "3.8"
 services:
   # UI Service (WebSocket, tick generation, frontend)
   ui:
-    build: ./backend
+    build: ../backend
     volumes:
-      - ./backend:/app
-      - ./backend/data:/app/data
+      - ../backend:/app
+      - ../backend/data:/app/data
     ports:
       - "8000:8000"
     environment:
@@ -24,10 +24,10 @@ services:
   # Rules Engine Service (Pure rule evaluation logic)
   rules-engine:
     build:
-      context: .
-      dockerfile: services/rules_engine/Dockerfile
+      context: ..
+      dockerfile: whispr/services/rules_engine/Dockerfile
     volumes:
-      - ./backend/data:/app/data
+      - ../backend/data:/app/data
     ports:
       - "8001:8001"
     environment:
@@ -38,4 +38,4 @@ services:
       - DB_PATH=${DB_PATH:-/app/data/whispr.db}
 
 volumes:
-  whispr_db: 
+  whispr_db:

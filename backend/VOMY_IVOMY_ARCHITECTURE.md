@@ -193,7 +193,7 @@ Result: No trigger
 
 Run the test suite to verify functionality:
 ```bash
-cd whispr/backend
+cd backend
 python3 test_vomy_rules.py
 ```
 

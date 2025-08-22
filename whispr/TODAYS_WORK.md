@@ -32,7 +32,7 @@
 
 ### File Structure
 ```
-whispr/backend/
+backend/
 ├── atr_strategy.py                 ✅
 ├── vomy_strategy.py                ✅
 ├── four_h_po_dot_strategy.py       ✅

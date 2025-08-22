@@ -127,7 +127,7 @@ CREATE TABLE events (
 
 ### File Structure
 ```
-whispr/backend/
+backend/
 ├── main.py                          # FastAPI application
 ├── database.py                      # Database operations
 ├── strategies.py                    # Strategy management
