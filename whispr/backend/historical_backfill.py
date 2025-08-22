@@ -110,45 +110,51 @@ class HistoricalDataBackfill:
             
     def _store_candles(self, candles: List[Dict], timeframe: str) -> int:
         """Store candles in database"""
-        conn = sqlite3.connect(self.db_path)
+        try:
+            conn = sqlite3.connect(self.db_path)
+        except sqlite3.Error as e:
+            print(f"❌ Failed to connect to database at {self.db_path}: {e}")
+            return 0
+
         cursor = conn.cursor()
-        
-        stored_count = 0
-        
+        before_changes = conn.total_changes
+
         for candle in candles:
+            timestamp = "unknown"
             try:
                 # Convert timestamp
                 timestamp = datetime.fromtimestamp(
-                    candle["datetime"] / 1000, 
+                    candle["datetime"] / 1000,
                     timezone.utc
                 ).isoformat()
-                
+
                 # Insert candle (ignore duplicates)
-                cursor.execute("""
-                    INSERT OR IGNORE INTO historical_candles 
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO historical_candles
                     (symbol, timeframe, timestamp, open_price, high_price, low_price, close_price, volume)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    "SPX",
-                    timeframe, 
-                    timestamp,
-                    candle["open"],
-                    candle["high"], 
-                    candle["low"],
-                    candle["close"],
-                    candle.get("volume", 0)
-                ))
-                
-                if cursor.rowcount > 0:
-                    stored_count += 1
-                    
+                    """,
+                    (
+                        "SPX",
+                        timeframe,
+                        timestamp,
+                        candle["open"],
+                        candle["high"],
+                        candle["low"],
+                        candle["close"],
+                        candle.get("volume", 0)
+                    ),
+                )
+            except sqlite3.IntegrityError as e:
+                print(f"⚠️ Unique constraint error for {timestamp}: {e}")
             except Exception as e:
-                print(f"⚠️ Error storing candle: {e}")
-                continue
-                
+                print(f"⚠️ Error storing candle {timestamp}: {e}")
+
         conn.commit()
+        stored_count = conn.total_changes - before_changes
         conn.close()
-        
+
         return stored_count
         
     async def run_full_backfill(self):
