@@ -2,7 +2,13 @@ import json
 import asyncio
 from datetime import datetime
 from typing import Dict, Any, List
+import os
+import sys
 from database import get_db, log_event
+
+# Ensure root path for importing rule helpers
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from rules.atr_rules import build_adjacent_rules, build_multi_level_rules
 
 class ATRStrategyGenerator:
     """Generates and manages ATR-based rules (adjacent and multi-level)."""
@@ -96,85 +102,72 @@ class ATRStrategyGenerator:
         """Generate adjacent (one-step) ATR rules for a timeframe."""
         conn = await get_db()
         strategies_created = 0
-        
+
         for tag, rule_spec in self.specification["adjacent_rules"].items():
             key = rule_spec["key"]
-            
+
             if key not in self.atr_levels[timeframe]:
                 await log_event("warning", {"message": f"ATR level {key} not found for timeframe {timeframe}"})
                 continue
-            
+
             level_value = self.atr_levels[timeframe][key]
-            
-            # Generate bullish rule
-            bull_name = f"ATR {timeframe.capitalize()} {tag} Bull"
-            bull_expression = f"price >= {level_value}"
-            bull_tags = json.dumps(["atr_level", timeframe, tag, "bull"])
-            
-            await self._create_atr_strategy(
-                bull_name, bull_expression, rule_spec["description"], 
-                bull_tags, rule_spec["probability"], rule_spec["priority"], 
-                "atr_level", timeframe, tag, "bull", level_value
-            )
-            strategies_created += 1
-            
-            # Generate bearish rule
-            bear_name = f"ATR {timeframe.capitalize()} {tag} Bear"
-            bear_expression = f"price <= -{level_value}"
-            bear_tags = json.dumps(["atr_level", timeframe, tag, "bear"])
-            
-            await self._create_atr_strategy(
-                bear_name, bear_expression, rule_spec["description"],
-                bear_tags, rule_spec["probability"], rule_spec["priority"],
-                "atr_level", timeframe, tag, "bear", -level_value
-            )
-            strategies_created += 1
-        
+
+            for rule in build_adjacent_rules(timeframe, tag, level_value):
+                await self._create_atr_strategy(
+                    rule["name"],
+                    rule["condition"].expression,
+                    rule_spec["description"],
+                    json.dumps(rule["tags"]),
+                    rule_spec["probability"],
+                    rule_spec["priority"],
+                    rule["rule_type"],
+                    timeframe,
+                    tag,
+                    rule["side"],
+                    rule["condition"].level,
+                    rule["action"].name,
+                )
+                strategies_created += 1
+
         return strategies_created
     
     async def _generate_multi_level_rules(self, timeframe: str) -> int:
         """Generate multi-level (skip-a-step) ATR rules for a timeframe."""
         conn = await get_db()
         strategies_created = 0
-        
+
         for tag, rule_spec in self.specification["multi_level_rules"].items():
             key = rule_spec["key"]
-            
+
             if key not in self.atr_levels[timeframe]:
                 await log_event("warning", {"message": f"ATR level {key} not found for timeframe {timeframe}"})
                 continue
-            
+
             level_value = self.atr_levels[timeframe][key]
-            
-            # Generate bullish rule
-            bull_name = f"ATR {timeframe.capitalize()} {tag} Bull"
-            bull_expression = f"price >= {level_value}"
-            bull_tags = json.dumps(["atr_multi", timeframe, tag, "bull"])
-            
-            await self._create_atr_strategy(
-                bull_name, bull_expression, rule_spec["description"],
-                bull_tags, rule_spec["probability"], rule_spec["priority"],
-                "atr_multi", timeframe, tag, "bull", level_value
-            )
-            strategies_created += 1
-            
-            # Generate bearish rule
-            bear_name = f"ATR {timeframe.capitalize()} {tag} Bear"
-            bear_expression = f"price <= -{level_value}"
-            bear_tags = json.dumps(["atr_multi", timeframe, tag, "bear"])
-            
-            await self._create_atr_strategy(
-                bear_name, bear_expression, rule_spec["description"],
-                bear_tags, rule_spec["probability"], rule_spec["priority"],
-                "atr_multi", timeframe, tag, "bear", -level_value
-            )
-            strategies_created += 1
-        
+
+            for rule in build_multi_level_rules(timeframe, tag, level_value):
+                await self._create_atr_strategy(
+                    rule["name"],
+                    rule["condition"].expression,
+                    rule_spec["description"],
+                    json.dumps(rule["tags"]),
+                    rule_spec["probability"],
+                    rule_spec["priority"],
+                    rule["rule_type"],
+                    timeframe,
+                    tag,
+                    rule["side"],
+                    rule["condition"].level,
+                    rule["action"].name,
+                )
+                strategies_created += 1
+
         return strategies_created
     
-    async def _create_atr_strategy(self, name: str, expression: str, description: str, 
+    async def _create_atr_strategy(self, name: str, expression: str, description: str,
                               tags: str, probability: float, priority: int,
-                              rule_type: str, timeframe: str, tag: str, side: str, level: float):
+                              rule_type: str, timeframe: str, tag: str, side: str,
+                              level: float, action_name: str):
         """Create a single ATR rule."""
         conn = await get_db()
         
@@ -193,7 +186,8 @@ class ATRStrategyGenerator:
             "tag": tag,
             "side": side,
             "level": level,
-            "probability": probability
+            "probability": probability,
+            "action": action_name,
         })
         
         await conn.execute(
@@ -264,4 +258,4 @@ class ATRStrategyGenerator:
             return {"triggered": False, "error": f"Evaluation failed: {str(e)}"}
 
 # Global instance
-atr_strategy_generator = ATRStrategyGenerator() 
+atr_strategy_generator = ATRStrategyGenerator()
