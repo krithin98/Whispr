@@ -30,12 +30,17 @@ This is a 6-week MVP to prove the core loop: **data → rule → AI prompt → s
    # Add your OPENAI_API_KEY when ready for Week 3
    ```
 
-3. **Start the application**
+3. **Install frontend dependencies**
+   ```bash
+   npm --prefix whispr/ui install
+   ```
+
+4. **Start the application**
    ```bash
    docker compose up --build
    ```
 
-4. **Verify it's working**
+5. **Verify it's working**
    - Health check: http://localhost:8000/
    - API docs: http://localhost:8000/docs
    - WebSocket: ws://localhost:8000/ws/ticks
