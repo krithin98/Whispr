@@ -54,15 +54,6 @@ class ATRCalculator:
         self.high_history: Dict[str, List[float]] = {}
         self.low_history: Dict[str, List[float]] = {}
         
-        # Optimized periods for different timeframes (from our testing)
-        self.timeframe_periods = {
-            "day": 14,      # Perfect accuracy
-            "multiday": 20, # 99.2% accuracy 
-            "swing": 14,    # Default (to be optimized)
-            "position": 14, # Default (to be optimized)
-            "long_term": 14 # Default (to be optimized)
-        }
-        
     def add_price_data(self, timeframe: str, high: float, low: float, close: float):
         """Add price data for ATR calculation."""
         if timeframe not in self.price_history:
@@ -121,7 +112,7 @@ class ATRCalculator:
         for i in range(self.atr_length, len(true_ranges)):
             current_atr = ((current_atr * (self.atr_length - 1)) + true_ranges[i]) / self.atr_length
         
-        return current_atr  # Use full precision like ToS
+        return round(current_atr, 2)
     
     def calculate_atr_levels(self, timeframe: str, current_high: float = None, current_low: float = None) -> Optional[ATRLevels]:
         """Calculate all ATR levels for a timeframe using exact ThinkScript logic."""

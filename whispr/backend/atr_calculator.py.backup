@@ -54,15 +54,6 @@ class ATRCalculator:
         self.high_history: Dict[str, List[float]] = {}
         self.low_history: Dict[str, List[float]] = {}
         
-        # Optimized periods for different timeframes (from our testing)
-        self.timeframe_periods = {
-            "day": 14,      # Perfect accuracy
-            "multiday": 20, # 99.2% accuracy 
-            "swing": 14,    # Default (to be optimized)
-            "position": 14, # Default (to be optimized)
-            "long_term": 14 # Default (to be optimized)
-        }
-        
     def add_price_data(self, timeframe: str, high: float, low: float, close: float):
         """Add price data for ATR calculation."""
         if timeframe not in self.price_history:

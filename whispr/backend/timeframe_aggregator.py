@@ -132,6 +132,12 @@ class SPXTimeframeAggregator:
             timeframe: One of your 6 timeframes
             periods: Number of recent bars to return
         """
+        # First check if we have cached data (from database bootstrap)
+        if timeframe in self.aggregated_cache and self.aggregated_cache[timeframe]:
+            cached_data = self.aggregated_cache[timeframe]
+            return cached_data[-periods:] if len(cached_data) >= periods else cached_data
+        
+        # Fallback to aggregated data (from live minute data)
         aggregated = self.get_aggregated_timeframes()
         
         if timeframe in aggregated and aggregated[timeframe]:

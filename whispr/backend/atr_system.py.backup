@@ -275,124 +275,52 @@ class SPXATRSystem:
             return None
     
     async def _bootstrap_historical_data(self, timeframe: str) -> bool:
-        """Bootstrap historical data from database - feed directly to aggregator cache"""
+        """Bootstrap historical data for a timeframe using Schwab API"""
         try:
-            logger.info(f"📊 Loading historical data from database for {timeframe} timeframe...")
+            logger.info(f"📊 Fetching historical SPX data for {timeframe} timeframe...")
             
-            # Map timeframes to database timeframes
-            timeframe_mapping = {
-                "scalp": "1min_10d",      # Use 1-min for 4h aggregation (only this needs aggregation)
-                "day": "daily_20y",       # Direct: daily data → daily timeframe
-                "multiday": "weekly_20y", # Direct: weekly data → multiday timeframe  
-                "swing": "monthly_20y",   # Direct: monthly data → swing timeframe
-                "position": "monthly_20y", # Will aggregate monthly → quarterly
-                "long_term": "monthly_20y" # Will aggregate monthly → yearly
+            # Determine how much historical data we need based on timeframe
+            timeframe_days = {
+                "scalp": 3,      # 4H bars: need 3 days for 14+ bars  
+                "day": 30,       # Daily bars: need 30 days for 14+ bars
+                "multiday": 120, # Weekly bars: need ~4 months for 14+ bars
+                "swing": 365,    # Monthly bars: need 1+ year for 14+ bars
+                "position": 1095, # Quarterly: need 3+ years for 14+ bars
+                "long_term": 4380 # Yearly: need 12+ years for 14+ bars
             }
             
-            db_timeframe = timeframe_mapping.get(timeframe, "daily_20y")
-            # Use ALL available data for maximum ATR accuracy
-            optimal_limits = {
-                "scalp": 3900,     # All 1-min data (10 days)
-                "day": 5031,       # All daily data (20 years) 
-                "multiday": 1043,  # All weekly data (20 years)
-                "swing": 240,      # All monthly data (20 years)
-                "position": 240,   # All monthly data (20 years)
-                "long_term": 240   # All monthly data (20 years)
-            }
+            days_needed = timeframe_days.get(timeframe, 30)
             
-            limit = optimal_limits.get(timeframe, 5000)  # Use optimal limits
+            # Get minute data from Schwab (this will be our base data)
+            minute_candles = await self.data_collector.get_minute_data("SPX", days=min(days_needed, 7))
             
-            # Connect to database
-            import sqlite3
-            conn = sqlite3.connect("/opt/spx-atr/data/spx_tracking.db")
-            cursor = conn.cursor()
-            
-            # Get historical data
-            cursor.execute("""
-                SELECT timestamp, open_price, high_price, low_price, close_price, volume
-                FROM historical_candles 
-                WHERE timeframe = ?
-                ORDER BY timestamp ASC
-                LIMIT ?
-            """, (db_timeframe, limit))
-            
-            results = cursor.fetchall()
-            conn.close()
-            
-            if not results:
-                logger.warning(f"⚠️  No historical data found for {timeframe} ({db_timeframe})")
+            if not minute_candles:
+                logger.warning(f"⚠️  No minute data received from Schwab for bootstrapping")
                 return False
             
-            logger.info(f"✅ Retrieved {len(results)} historical candles for {timeframe}")
+            logger.info(f"✅ Retrieved {len(minute_candles)} minute candles from Schwab")
             
-            # Convert to OHLCBar objects and feed directly to the aggregator cache
-            from dataclasses import dataclass
-            from datetime import datetime
-            from typing import List
-            
-            bars = []
-            for row in results:
-                timestamp_str, open_price, high_price, low_price, close_price, volume = row
-                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                
-                # Create OHLCBar object
-                bar = OHLCBar(
-                    timestamp=timestamp,
-                    open=open_price,
-                    high=high_price,
-                    low=low_price,
-                    close=close_price,
-                    volume=volume,
-                    timeframe=timeframe
+            # Feed this historical minute data into our aggregator
+            for candle in minute_candles:
+                self.timeframe_aggregator.add_minute_bar(
+                    candle.timestamp,
+                    candle.open,
+                    candle.high, 
+                    candle.low,
+                    candle.close,
+                    candle.volume
                 )
-                bars.append(bar)
             
-            # Special handling for scalp (needs aggregation from 1-min)
-            if timeframe == "scalp":
-                # Feed 1-min data for aggregation to 4h
-                for bar in bars:
-                    self.timeframe_aggregator.add_minute_bar(
-                        bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume
-                    )
-            else:
-                # Feed directly to the aggregator cache for this timeframe
-                self.timeframe_aggregator.aggregated_cache[timeframe] = bars
+            # Verify we now have enough data
+            historical_candles = self.timeframe_aggregator.get_timeframe_history(timeframe, periods=30)
             
-            logger.info(f"📈 Bootstrap complete: {len(bars)} {timeframe} bars loaded")
-            return len(bars) >= 14
+            logger.info(f"📈 After bootstrap: {len(historical_candles)} {timeframe} bars available")
+            
+            return len(historical_candles) >= 14
             
         except Exception as e:
-            logger.error(f"❌ Database bootstrap failed for {timeframe}: {e}")
+            logger.error(f"❌ Error bootstrapping historical data for {timeframe}: {e}")
             return False
-    
-    async def _process_minute_data_for_4h(self, minute_data: list):
-        """Process 1-minute data into 4-hour bars for scalp timeframe"""
-        from datetime import datetime
-        for row in minute_data:
-            timestamp_str, open_price, high_price, low_price, close_price, volume = row
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            
-            # Feed into aggregator as minute bars
-            self.timeframe_aggregator.add_minute_bar(
-                timestamp, open_price, high_price, low_price, close_price, volume
-            )
-    
-    async def _process_historical_bars(self, historical_data: list, timeframe: str):
-        """Process historical bars - convert all to minute bars for aggregation"""
-        from datetime import datetime
-        logger.info(f"🔄 Processing {len(historical_data)} {timeframe} bars into minute format...")
-        
-        for row in historical_data:
-            timestamp_str, open_price, high_price, low_price, close_price, volume = row
-            timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            
-            # All historical data goes through add_minute_bar
-            # The aggregator will handle timeframe conversion automatically
-            self.timeframe_aggregator.add_minute_bar(
-                timestamp, open_price, high_price, low_price, close_price, volume
-            )
-        
-        logger.info(f"✅ Processed {len(historical_data)} historical bars for {timeframe}")
     
     async def _check_level_hits(self, current_price: float, atr_levels: ATRLevels, timeframe: str) -> List[FibLevelHit]:
         """Check if current price hits any ATR levels"""
