@@ -17,6 +17,8 @@ export default function DashboardPage() {
   const [selectedSection, setSelectedSection] = React.useState<string | null>(null);
   const [editingStrategy, setEditingStrategy] = React.useState<Strategy | null>(null);
   const [isAddingStrategy, setIsAddingStrategy] = React.useState(false);
+  const [strategyActionLoading, setStrategyActionLoading] = React.useState(false);
+  const [strategyActionError, setStrategyActionError] = React.useState<string | null>(null);
   const whisprData = useWhisprData();
 
   const handleSectionClick = (section: string) => {
@@ -26,14 +28,18 @@ export default function DashboardPage() {
   const handleEditStrategy = (strategy: Strategy) => {
     setEditingStrategy(strategy);
     setIsAddingStrategy(false);
+    setStrategyActionError(null);
   };
 
   const handleAddStrategy = () => {
     setEditingStrategy(null);
     setIsAddingStrategy(true);
+    setStrategyActionError(null);
   };
 
   const handleSaveStrategy = async (formData: Partial<Strategy> & { name: string }) => {
+    setStrategyActionLoading(true);
+    setStrategyActionError(null);
     try {
       if (isAddingStrategy) {
         await whisprData.createStrategy({
@@ -56,27 +62,37 @@ export default function DashboardPage() {
       setIsAddingStrategy(false);
     } catch (error) {
       console.error('Failed to save strategy:', error);
-      alert('Failed to save strategy');
+      setStrategyActionError(error instanceof Error ? error.message : 'Failed to save strategy');
+    } finally {
+      setStrategyActionLoading(false);
     }
   };
 
   const handleDeleteStrategy = async (strategyId: number) => {
     if (confirm('Are you sure you want to delete this strategy?')) {
+      setStrategyActionLoading(true);
+      setStrategyActionError(null);
       try {
         await whisprData.deleteStrategy(strategyId);
       } catch (error) {
         console.error('Failed to delete strategy:', error);
-        alert('Failed to delete strategy');
+        setStrategyActionError(error instanceof Error ? error.message : 'Failed to delete strategy');
+      } finally {
+        setStrategyActionLoading(false);
       }
     }
   };
 
   const handleToggleStrategy = async (strategyId: number) => {
+    setStrategyActionLoading(true);
+    setStrategyActionError(null);
     try {
       await whisprData.toggleStrategy(strategyId);
     } catch (error) {
       console.error('Failed to toggle strategy:', error);
-      alert('Failed to toggle strategy');
+      setStrategyActionError(error instanceof Error ? error.message : 'Failed to toggle strategy');
+    } finally {
+      setStrategyActionLoading(false);
     }
   };
 
@@ -298,7 +314,7 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-semibold">Strategies ({whisprData.strategies.length})</h3>
-                  <Button onClick={handleAddStrategy} className="bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={handleAddStrategy} className="bg-blue-600 hover:bg-blue-700" disabled={strategyActionLoading}>
                     + Add New Strategy
                   </Button>
                 </div>
@@ -309,6 +325,9 @@ export default function DashboardPage() {
                   <div className="text-red-400 text-center py-8">Error: {whisprData.strategiesError}</div>
                 ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {strategyActionError && (
+                      <div className="text-red-400 text-center py-2">{strategyActionError}</div>
+                    )}
                     {whisprData.strategies.map((strategy) => (
                       <div key={strategy.id} className="bg-gray-700 p-4 rounded-lg">
                         <div className="flex justify-between items-start">
@@ -319,33 +338,36 @@ export default function DashboardPage() {
                             <div className="text-xs text-gray-500 mt-1">Expression: {strategy.strategy_expression}</div>
                           </div>
                           <div className="flex gap-2 ml-4">
-                                                         <Button 
+                                                         <Button
                                size="sm"
                                variant={strategy.is_active ? "destructive" : "default"}
                                onClick={(e: React.MouseEvent) => {
                                  e.stopPropagation();
                                  handleToggleStrategy(strategy.id);
                                }}
+                               disabled={strategyActionLoading}
                              >
                               {strategy.is_active ? 'Disable' : 'Enable'}
                             </Button>
-                                                         <Button 
+                                                         <Button
                                size="sm"
                                variant="outline"
                                onClick={(e: React.MouseEvent) => {
                                  e.stopPropagation();
                                  handleEditStrategy(strategy);
                                }}
+                               disabled={strategyActionLoading}
                              >
                               Edit
                             </Button>
-                                                         <Button 
+                                                         <Button
                                size="sm"
                                variant="destructive"
                                onClick={(e: React.MouseEvent) => {
                                  e.stopPropagation();
                                  handleDeleteStrategy(strategy.id);
                                }}
+                               disabled={strategyActionLoading}
                              >
                               Delete
                             </Button>
@@ -428,13 +450,17 @@ export default function DashboardPage() {
           <DialogTitle className="text-xl font-bold text-white mb-4">
             {isAddingStrategy ? 'Add New Strategy' : 'Edit Strategy'}
           </DialogTitle>
-          <StrategyForm 
+          <StrategyForm
             strategy={editingStrategy}
             onSave={handleSaveStrategy}
             onCancel={() => {
               setEditingStrategy(null);
               setIsAddingStrategy(false);
+              setStrategyActionError(null);
+              setStrategyActionLoading(false);
             }}
+            loading={strategyActionLoading}
+            error={strategyActionError}
           />
         </DialogContent>
       </Dialog>
@@ -443,10 +469,12 @@ export default function DashboardPage() {
 }
 
 // Strategy Form Component
-function StrategyForm({ strategy, onSave, onCancel }: {
+function StrategyForm({ strategy, onSave, onCancel, loading, error }: {
   strategy: Strategy | null;
   onSave: (data: Partial<Strategy> & { name: string }) => Promise<void>;
   onCancel: () => void;
+  loading: boolean;
+  error: string | null;
 }) {
   const [formData, setFormData] = React.useState({
     name: strategy?.name || '',
@@ -455,16 +483,10 @@ function StrategyForm({ strategy, onSave, onCancel }: {
     conditions: strategy?.conditions || '',
     is_active: strategy?.is_active ?? true
   });
-  const [isLoading, setIsLoading] = React.useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    try {
-      await onSave(formData);
-    } finally {
-      setIsLoading(false);
-    }
+    await onSave(formData);
   };
 
   return (
@@ -533,12 +555,14 @@ function StrategyForm({ strategy, onSave, onCancel }: {
         </div>
       )}
       
+      {error && <div className="text-red-400 text-sm">{error}</div>}
+
       <div className="flex justify-end space-x-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving...' : (strategy ? 'Update' : 'Create')}
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Saving...' : (strategy ? 'Update' : 'Create')}
         </Button>
       </div>
     </form>
