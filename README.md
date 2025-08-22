@@ -94,7 +94,7 @@ wscat -c ws://localhost:8000/ws/ticks
 ## Project Structure
 
 ```
-tradingATR.ai/
+Whispr/
 ├── main.py              # FastAPI application
 ├── requirements.txt     # Python dependencies
 ├── Dockerfile          # Container configuration

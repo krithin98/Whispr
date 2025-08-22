@@ -27,7 +27,7 @@ async def get_db():
     """Return a singleton connection (FastAPI will reuse it)."""
     if not hasattr(get_db, "conn"):
         get_db.conn = await aiosqlite.connect(DB_PATH, isolation_level=None)  # autocommit
-        await get_db.conn.execute(CREATE_SQL)
+        await get_db.conn.executescript(CREATE_SQL)
     return get_db.conn
 
 async def log_event(event_type: str, payload: dict):
@@ -35,4 +35,4 @@ async def log_event(event_type: str, payload: dict):
     await conn.execute(
         "INSERT INTO events (ts, event_type, payload) VALUES (datetime('now'), ?, ?)",
         (event_type, json.dumps(payload)),
-    ) 
+    )
