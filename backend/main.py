@@ -1,9 +1,10 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import Depends, FastAPI, WebSocket
 import asyncio
 import json
 from database import log_event, get_db
 from llm import get_cost_comparison, call_llm
 from rules import check_rules, seed_test_rules
+from data_providers import DataProvider, SimulatedProvider
 
 app = FastAPI(title="Whispr-MVP")
 
@@ -16,59 +17,65 @@ async def startup_event():
 async def root():
     return {"status": "OK", "message": "Whispr backend running"}
 
-@app.websocket("/ws/ticks")
-async def websocket_ticks(ws: WebSocket):
-    await ws.accept()
-    tick = 0
-    while True:
-        tick_data = {"tick": tick, "value": 100 + tick}
-        await log_event("tick", tick_data)  # Log before broadcasting
-        await ws.send_json(tick_data)
+async def get_data_provider() -> DataProvider:
+    provider = SimulatedProvider()
+    await provider.connect()
+    return provider
 
-        # NEW: evaluate rules
-        async for rule in check_rules(tick_data):
-            try:
-                # Format prompt template with tick data
-                prompt = rule["tpl"].format(**tick_data)
-                
-                # Call LLM with the prompt
-                llm_response = await call_llm([
-                    {"role": "user", "content": prompt}
-                ])
-                
-                # Create suggestion payload
-                suggestion_payload = {
-                    "type": "suggestion",
-                    "rule_id": rule["id"],
-                    "rule_name": rule["name"],
-                    "prompt": prompt,
-                    "response": llm_response["content"],
-                    "cost": llm_response["cost_estimate"],
-                    "model": llm_response["model"],
-                    "tick_data": tick_data
-                }
-                
-                # Log the prompt event
-                await log_event("prompt", {
-                    "rule_id": rule["id"],
-                    "prompt": prompt,
-                    "response": llm_response["content"],
-                    "cost": llm_response["cost_estimate"],
-                    "model": llm_response["model"]
-                })
-                
-                # Send suggestion over WebSocket
-                await ws.send_json(suggestion_payload)
-                
-            except Exception as e:
-                # Log any errors
-                await log_event("rule_error", {
-                    "rule_id": rule["id"],
-                    "error": str(e)
-                })
-        
-        await asyncio.sleep(1)        # 1-Hz simulated stream
-        tick += 1
+
+@app.websocket("/ws/ticks")
+async def websocket_ticks(
+    ws: WebSocket, provider: DataProvider = Depends(get_data_provider)
+):
+    await ws.accept()
+    try:
+        async for tick_data in provider.subscribe("SIM"):
+            await log_event("tick", tick_data)  # Log before broadcasting
+            await ws.send_json(tick_data)
+
+            # NEW: evaluate rules
+            async for rule in check_rules(tick_data):
+                try:
+                    # Format prompt template with tick data
+                    prompt = rule["tpl"].format(**tick_data)
+
+                    # Call LLM with the prompt
+                    llm_response = await call_llm([
+                        {"role": "user", "content": prompt}
+                    ])
+
+                    # Create suggestion payload
+                    suggestion_payload = {
+                        "type": "suggestion",
+                        "rule_id": rule["id"],
+                        "rule_name": rule["name"],
+                        "prompt": prompt,
+                        "response": llm_response["content"],
+                        "cost": llm_response["cost_estimate"],
+                        "model": llm_response["model"],
+                        "tick_data": tick_data
+                    }
+
+                    # Log the prompt event
+                    await log_event("prompt", {
+                        "rule_id": rule["id"],
+                        "prompt": prompt,
+                        "response": llm_response["content"],
+                        "cost": llm_response["cost_estimate"],
+                        "model": llm_response["model"]
+                    })
+
+                    # Send suggestion over WebSocket
+                    await ws.send_json(suggestion_payload)
+
+                except Exception as e:
+                    # Log any errors
+                    await log_event("rule_error", {
+                        "rule_id": rule["id"],
+                        "error": str(e)
+                    })
+    finally:
+        await provider.disconnect()
 
 @app.get("/last_events")
 async def last_events(limit: int = 5):
