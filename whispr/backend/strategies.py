@@ -1,12 +1,17 @@
 import json
 import ast
 import operator as op
+import os
+import sys
 from database import get_db, log_event, log_strategy_trigger
 from indicators import indicator_manager, gg_rule_generator
-from atr_strategy import atr_strategy_generator
 from vomy_strategy import VomyStrategyGenerator, VomyStrategyEvaluator
 from four_h_po_dot_strategy import po_dot_strategy_generator
 from conviction_arrow_strategy import conviction_arrow_strategy
+
+# Ensure project root is on the import path for strategy modules
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
+from strategies.atr_strategy import atr_strategy
 
 _ALLOWED_NODES = (
     ast.Expression, ast.BinOp, ast.UnaryOp, ast.Num, ast.Name, ast.Load,
@@ -67,26 +72,17 @@ async def check_strategies(tick):
     strategies = await load_strategies()
     await log_event("debug", {"message": f"Loaded {len(strategies)} strategies"})
     triggered = []
-    
+
     for strategy in strategies:
         strategy_type = strategy.get("strategy_type", "standard")
         triggered_strategy = None
-        
+
+        if strategy_type == "atr_based":
+            # ATR strategies are handled via the ATRStrategy engine
+            continue
         if strategy_type == "golden_gate":
             # Handle Golden Gate strategies
             result = await gg_rule_generator.evaluate_gg_strategy(
-                strategy["id"], 
-                tick.get("price", tick.get("value", 0)), 
-                tick.get("symbol", "SPY")
-            )
-            if result.get("triggered", False):
-                triggered_strategy = {
-                    **strategy,
-                    "evaluation_result": result
-                }
-        elif strategy_type == "atr_based":
-            # Handle ATR-based strategies
-            result = await atr_strategy_generator.evaluate_atr_strategy(
                 strategy["id"],
                 tick.get("price", tick.get("value", 0)),
                 tick.get("symbol", "SPY")
@@ -183,7 +179,10 @@ async def check_strategies(tick):
                     "strategy_id": strategy["id"],
                     "strategy_name": strategy["name"]
                 })
-    
+
+    # Evaluate ATR-based rules generated in memory
+    triggered.extend(atr_strategy.evaluate(tick))
+
     return triggered
 
 async def add_strategy(name: str, trigger_expr: str, prompt_tpl: str):
@@ -198,7 +197,6 @@ async def seed_test_strategies():
     """Add real trading strategies to get started (test strategies removed)."""
     # Real trading strategies
     real_strategies = [
-        ("ATR Strategy", "True", "ATR-based strategy triggered. Check ATR levels and volatility conditions.", "atr_based"),
         ("Vomy Strategy", "True", "Vomy strategy activated. Analyze volume and momentum indicators.", "vomy_ivomy"),
         ("4H PO Dot Strategy", "True", "4-Hour Phase Oscillator Dot strategy triggered. Check trend direction.", "po_dot"),
         ("Conviction Arrow Strategy", "True", "Conviction Arrow signal detected. Evaluate market conviction.", "conviction_arrow"),
