@@ -223,3 +223,4 @@ The system comes with 3 test rules:
 3. **Check events**: `curl http://localhost:8000/last_events?limit=10`
 4. **View rules**: `curl http://localhost:8000/rules`
 5. **Monitor costs**: `curl http://localhost:8000/costs`
+6. **Run unit tests**: `pytest backend/tests` (also executed in CI)

@@ -20,7 +20,15 @@ def _safe_eval(expr, context):
             right = _safe_eval(ast.unparse(tree.comparators[0]), context)
             op = SAFE_OPS[type(tree.ops[0])]
             return op(left, right)
-        return context.get(expr, expr)
+        if isinstance(tree, ast.Name):
+            return context.get(tree.id)
+        if isinstance(tree, ast.Constant):
+            return tree.value
+        if isinstance(tree, ast.BinOp) and isinstance(tree.op, ast.Mod):
+            left = _safe_eval(ast.unparse(tree.left), context)
+            right = _safe_eval(ast.unparse(tree.right), context)
+            return left % right
+        return False
     except Exception:
         return False
 
