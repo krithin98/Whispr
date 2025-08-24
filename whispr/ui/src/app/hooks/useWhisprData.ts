@@ -139,7 +139,7 @@ export function useWhisprData(): WhisprDataState & WhisprDataActions {
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
     }
-  }, []);
+  }, [refreshTriggers]);
   
   // API functions
   const refreshStrategies = useCallback(async () => {
@@ -167,22 +167,34 @@ export function useWhisprData(): WhisprDataState & WhisprDataActions {
   
   const createStrategy = useCallback(async (strategy: Omit<Strategy, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      setStrategiesLoading(true);
+      setStrategiesError(null);
       await api.createStrategy(strategy);
       await refreshStrategies();
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create strategy';
+      setStrategiesError(message);
       throw error;
+    } finally {
+      setStrategiesLoading(false);
     }
   }, [refreshStrategies]);
-  
+
   const updateStrategy = useCallback(async (id: number, strategy: Partial<Strategy>) => {
     try {
+      setStrategiesLoading(true);
+      setStrategiesError(null);
       await api.updateStrategy(id, strategy);
       await refreshStrategies();
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update strategy';
+      setStrategiesError(message);
       throw error;
+    } finally {
+      setStrategiesLoading(false);
     }
   }, [refreshStrategies]);
-  
+
   const deleteStrategy = useCallback(async (id: number) => {
     try {
       await api.deleteStrategy(id);
@@ -191,13 +203,19 @@ export function useWhisprData(): WhisprDataState & WhisprDataActions {
       throw error;
     }
   }, [refreshStrategies]);
-  
+
   const toggleStrategy = useCallback(async (id: number) => {
     try {
+      setStrategiesLoading(true);
+      setStrategiesError(null);
       await api.toggleStrategy(id);
       await refreshStrategies();
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to toggle strategy';
+      setStrategiesError(message);
       throw error;
+    } finally {
+      setStrategiesLoading(false);
     }
   }, [refreshStrategies]);
   
