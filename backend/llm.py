@@ -76,21 +76,5 @@ async def call_llm(messages: list, max_tokens: int = 150) -> dict:
         return error_result
 
 def get_cost_comparison():
-<<<<<<< Updated upstream
-    """Return cost comparison for different models."""
-    return {
-        "current": {
-            "provider": LLM_PROVIDER,
-            "model": LLM_MODEL,
-            "costs": COSTS[LLM_PROVIDER].get(LLM_MODEL, COSTS[LLM_PROVIDER]["llama3-8b-8192"])
-        },
-        "alternatives": {
-            "groq_llama3_70b": COSTS["groq"]["llama3-70b-8192"],
-            "openai_gpt4o_mini": COSTS["openai"]["gpt-4o-mini"],
-            "openai_gpt4o": COSTS["openai"]["gpt-4o"]
-        }
-    } 
-=======
     """Return cost comparison for different providers."""
-    return COSTS 
->>>>>>> Stashed changes
+    return COSTS

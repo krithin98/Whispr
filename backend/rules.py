@@ -74,10 +74,5 @@ async def seed_test_rules() -> None:
         if not existing:
             await conn.execute(
                 "INSERT INTO rules (name, trigger_expr, prompt_tpl) VALUES (?, ?, ?)",
-<<<<<<< Updated upstream
-                (name, expr, tpl)
-            ) 
-=======
                 (name, expr, tpl),
-            ) 
->>>>>>> Stashed changes
+            )

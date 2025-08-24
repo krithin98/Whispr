@@ -1,6 +1,7 @@
 import os
 import asyncio
 import json
+from typing import Optional
 from fastapi import FastAPI, WebSocket
 
 from database import log_event, get_db
@@ -10,7 +11,7 @@ from data_providers import DataProvider, SimulatedProvider, SchwabProvider
 from codezx_api import router as codezx_router
 
 app = FastAPI(title="Whispr-MVP")
-provider: DataProvider | None = None
+provider: Optional[DataProvider] = None
 
 # Include CodeZX agent API routes
 app.include_router(codezx_router)
@@ -98,9 +99,6 @@ async def get_rules():
     rows = await conn.execute_fetchall(
         "SELECT id, name, trigger_expr, prompt_tpl, is_active FROM rules ORDER BY id",
     )
-<<<<<<< Updated upstream
-    return [{"id": r[0], "name": r[1], "trigger_expr": r[2], "prompt_tpl": r[3], "is_active": bool(r[4])} for r in rows] 
-=======
     return [
         {
             "id": r[0],
@@ -117,5 +115,4 @@ async def create_rule(name: str, trigger_expr: str, prompt_tpl: str):
     """Create a new rule."""
     from rules import add_rule
     await add_rule(name, trigger_expr, prompt_tpl)
-    return {"status": "created"} 
->>>>>>> Stashed changes
+    return {"status": "created"}

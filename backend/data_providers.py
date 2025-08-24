@@ -466,6 +466,80 @@ def get_provider(provider_type: str = "schwab", **kwargs):
     
     return DataProviderManager(provider_enum, **kwargs)
 
+# Classes needed by main.py
+class DataProvider:
+    """Base data provider interface."""
+    
+    async def connect(self):
+        """Connect to the data source."""
+        raise NotImplementedError
+    
+    async def disconnect(self):
+        """Disconnect from the data source."""
+        raise NotImplementedError
+    
+    async def subscribe(self):
+        """Subscribe to data stream."""
+        raise NotImplementedError
+
+class SimulatedProvider:
+    """Simulated data provider for testing and development."""
+    
+    def __init__(self):
+        self.connected = False
+        self.tick_count = 0
+    
+    async def connect(self):
+        """Connect to the simulated data source."""
+        self.connected = True
+        logger.info("Connected to simulated data provider")
+    
+    async def disconnect(self):
+        """Disconnect from the simulated data source."""
+        self.connected = False
+        logger.info("Disconnected from simulated data provider")
+    
+    async def subscribe(self):
+        """Subscribe to simulated tick data."""
+        while self.connected:
+            self.tick_count += 1
+            tick_data = {
+                "tick": self.tick_count,
+                "value": 100 + (self.tick_count % 20) - 10,  # Oscillate around 100
+                "timestamp": datetime.now().isoformat()
+            }
+            yield tick_data
+            await asyncio.sleep(1)  # 1 tick per second
+
+class SchwabProvider:
+    """Schwab data provider wrapper."""
+    
+    def __init__(self):
+        self.provider = None
+        self.connected = False
+    
+    async def connect(self):
+        """Connect to Schwab data source."""
+        # This would require actual Schwab credentials
+        # For now, we'll create a simulated provider
+        self.provider = SimulatedProvider()
+        await self.provider.connect()
+        self.connected = True
+        logger.info("Connected to Schwab data provider (simulated)")
+    
+    async def disconnect(self):
+        """Disconnect from Schwab data source."""
+        if self.provider:
+            await self.provider.disconnect()
+        self.connected = False
+        logger.info("Disconnected from Schwab data provider")
+    
+    async def subscribe(self):
+        """Subscribe to Schwab tick data."""
+        if self.provider:
+            async for tick_data in self.provider.subscribe():
+                yield tick_data
+
 # Example usage
 if __name__ == "__main__":
     async def test_schwab():

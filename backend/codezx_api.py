@@ -466,14 +466,5 @@ async def health_check() -> Dict[str, Any]:
             "version": "1.0.0"
         }
 
-# Error handlers
-@router.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """Global exception handler for unhandled errors."""
-    logger.error(f"Unhandled exception: {exc}")
-    return {
-        "status": "error",
-        "message": "Internal server error",
-        "detail": str(exc),
-        "timestamp": asyncio.get_event_loop().time()
-    }
+# Note: Exception handlers should be registered on the main FastAPI app, not the router
+# This will be handled by the main application
