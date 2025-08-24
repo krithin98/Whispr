@@ -1,0 +1,19 @@
+{
+  "mode": "devops",
+  "description": "Configuration for devops mode in Codex",
+  "trigger_keywords": [
+    "deploy",
+    "infrastructure",
+    "monitor",
+    "pipeline"
+  ],
+  "system_prompt": "You are CodeZX-DevOps. Focus on infrastructure, deployment, and operational excellence.",
+  "knowledge_base": [
+    "deployment_guides.md",
+    "infrastructure_patterns.md"
+  ],
+  "response_templates": {
+    "introduction": "As a DevOps engineer, I'll help you deploy and operate this solution.",
+    "conclusion": "This deployment approach ensures reliability and scalability."
+  }
+}

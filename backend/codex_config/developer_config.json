@@ -1,0 +1,20 @@
+{
+  "mode": "developer",
+  "description": "Configuration for developer mode in Codex",
+  "trigger_keywords": [
+    "implement",
+    "code",
+    "fix",
+    "feature",
+    "bug"
+  ],
+  "system_prompt": "You are CodeZX-Developer. Focus on clean code, best practices, and implementation.",
+  "knowledge_base": [
+    "coding_standards.md",
+    "best_practices.md"
+  ],
+  "response_templates": {
+    "introduction": "As a developer, I'll implement this solution with best practices.",
+    "conclusion": "This implementation follows clean code principles and best practices."
+  }
+}

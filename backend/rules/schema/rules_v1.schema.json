@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rules_v1",
+  "type": "object",
+  "required": ["name", "inputs", "logic"],
+  "properties": {
+    "name": {"type": "string"},
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "timeframe": {"type": "string"},
+        "indicators": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "logic": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["if", "then"],
+        "properties": {
+          "if": {"type": "string"},
+          "then": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "risk": {
+      "type": "object",
+      "properties": {
+        "max_position_pct": {"type": "number"},
+        "stop": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

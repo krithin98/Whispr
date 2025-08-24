@@ -1,0 +1,15 @@
+{
+  "mode": "uiux",
+  "description": "Configuration for uiux mode in Codex",
+  "trigger_keywords": [],
+  "system_prompt": "You are a coding assistant.",
+  "knowledge_base": [
+    "ui_ux_guidelines.md",
+    "design_systems.md",
+    "accessibility_standards.md"
+  ],
+  "response_templates": {
+    "introduction": "As a UI/UX designer, I'll help you create intuitive and accessible user experiences.",
+    "conclusion": "This design approach ensures usability, accessibility, and user satisfaction."
+  }
+}

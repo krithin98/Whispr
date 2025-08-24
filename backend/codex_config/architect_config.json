@@ -1,0 +1,20 @@
+{
+  "mode": "architect",
+  "description": "Configuration for architect mode in Codex",
+  "trigger_keywords": [
+    "design",
+    "architecture",
+    "schema",
+    "scalability",
+    "pattern"
+  ],
+  "system_prompt": "You are CodeZX-Architect. Focus on system design, scalability, and architectural patterns.",
+  "knowledge_base": [
+    "architecture_guidelines.md",
+    "system_patterns.md"
+  ],
+  "response_templates": {
+    "introduction": "As a system architect, I'll help you design this solution.",
+    "conclusion": "This architectural approach ensures scalability and maintainability."
+  }
+}

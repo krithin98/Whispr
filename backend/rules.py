@@ -12,11 +12,9 @@ SAFE_OPS = {
 }
 
 def _safe_eval(expr, context):
-    """
-    A very small and safe evaluator: supports comparisons like value > 105.
-    """
+    """A very small and safe evaluator: supports comparisons like value > 105."""
     try:
-        tree = ast.parse(expr, mode="eval").body  # type: ast.AST
+        tree = ast.parse(expr, mode="eval").body
         if isinstance(tree, ast.Compare):
             left = _safe_eval(ast.unparse(tree.left), context)
             right = _safe_eval(ast.unparse(tree.comparators[0]), context)
@@ -29,7 +27,9 @@ def _safe_eval(expr, context):
 async def load_rules():
     """Load all active rules from the database."""
     conn = await get_db()
-    rows = await conn.execute_fetchall("SELECT id, name, trigger_expr, prompt_tpl FROM rules WHERE is_active=1")
+    rows = await conn.execute_fetchall(
+        "SELECT id, name, trigger_expr, prompt_tpl FROM rules WHERE is_active=1"
+    )
     return [dict(zip(("id", "name", "expr", "tpl"), r)) for r in rows]
 
 async def check_rules(tick):
@@ -38,30 +38,46 @@ async def check_rules(tick):
         if _safe_eval(rule["expr"], tick):
             yield rule
 
-async def add_rule(name: str, trigger_expr: str, prompt_tpl: str):
+async def add_rule(name: str, trigger_expr: str, prompt_tpl: str) -> None:
     """Add a new rule to the database."""
     conn = await get_db()
     await conn.execute(
         "INSERT INTO rules (name, trigger_expr, prompt_tpl) VALUES (?, ?, ?)",
-        (name, trigger_expr, prompt_tpl)
+        (name, trigger_expr, prompt_tpl),
     )
 
-async def seed_test_rules():
+async def seed_test_rules() -> None:
     """Add some test rules to get started."""
     test_rules = [
-        ("High price ping", "value >= 105", "Price crossed {{value}}. Any risk-reducing actions?"),
-        ("Low price alert", "value <= 95", "Price dropped to {{value}}. Consider buying opportunity?"),
-        ("Tick milestone", "tick % 10 == 0", "Reached tick {{tick}} with value {{value}}. Market pattern analysis?")
+        (
+            "High price ping",
+            "value >= 105",
+            "Price crossed {{value}}. Any risk-reducing actions?",
+        ),
+        (
+            "Low price alert",
+            "value <= 95",
+            "Price dropped to {{value}}. Consider buying opportunity?",
+        ),
+        (
+            "Tick milestone",
+            "tick % 10 == 0",
+            "Reached tick {{tick}} with value {{value}}. Market pattern analysis?",
+        ),
     ]
-    
+
     conn = await get_db()
     for name, expr, tpl in test_rules:
-        # Check if rule already exists
         existing = await conn.execute_fetchall(
             "SELECT id FROM rules WHERE name = ?", (name,)
         )
         if not existing:
             await conn.execute(
                 "INSERT INTO rules (name, trigger_expr, prompt_tpl) VALUES (?, ?, ?)",
+<<<<<<< Updated upstream
                 (name, expr, tpl)
             ) 
+=======
+                (name, expr, tpl),
+            ) 
+>>>>>>> Stashed changes

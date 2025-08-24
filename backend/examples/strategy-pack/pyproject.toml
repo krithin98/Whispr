@@ -1,0 +1,15 @@
+[project]
+name = "whispr-strategy-template"
+version = "0.1.0"
+requires-python = ">=3.8"
+description = "Template strategy pack for Whispr trading system"
+authors = [
+    {name = "Whispr Team", email = "team@whispr.trading"}
+]
+
+[project.entry-points."whispr.strategies"]
+template = "whispr_strategy_template:TemplateStrategy"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

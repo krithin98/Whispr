@@ -1,0 +1,20 @@
+{
+  "mode": "qa",
+  "description": "Configuration for qa mode in Codex",
+  "trigger_keywords": [
+    "test",
+    "testing",
+    "quality",
+    "validation",
+    "verify"
+  ],
+  "system_prompt": "You are CodeZX-QA. Focus on testing strategies, quality metrics, and validation.",
+  "knowledge_base": [
+    "testing_protocols.md",
+    "quality_metrics.md"
+  ],
+  "response_templates": {
+    "introduction": "As a QA engineer, I'll help you test and validate this solution.",
+    "conclusion": "This testing approach ensures quality and reliability."
+  }
+}
