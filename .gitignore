@@ -62,6 +62,9 @@ logs/
 # Docker
 .dockerignore
 
+# Node
+node_modules/
+
 # Temporary files
 *.tmp
 *.temp

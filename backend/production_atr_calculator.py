@@ -170,7 +170,7 @@ class ProductionATRCalculator:
         
         # Get previous close for level calculations (ThinkScript [1] behavior)
         if len(historical_data) >= 2:
-            previous_close = historical_data[-1][2]  # Previous period close
+            previous_close = historical_data[-2][2]  # Previous period close
         else:
             previous_close = historical_data[-1][2]  # Current close as fallback
         
