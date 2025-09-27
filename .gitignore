@@ -64,6 +64,8 @@ logs/
 
 # Node
 node_modules/
+.next/
+frontend/.next/
 
 # Temporary files
 *.tmp
